@@ -1,2 +1,2 @@
 # NanoBot
-browser controlled differential drive robot
+Browser controlled differential drive robot using raspberry pi 5 and Orin Nano
