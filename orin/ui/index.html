@@ -1,0 +1,101 @@
+// ── WebRTC setup ──
+let pc = null;
+let dc = null;
+
+async function connect() {
+  setStatus('conn', '🟡 Connecting…');
+  pc = new RTCPeerConnection();
+  dc = pc.createDataChannel('control');
+
+  dc.onopen  = () => setStatus('conn', '🟢 Connected');
+  dc.onclose = () => { setStatus('conn', '🔴 Disconnected'); setTimeout(connect, 3000); };
+  dc.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'estop') setStatus('drive', msg.active ? 'Drive: E-STOP' : 'Drive: idle');
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    if (['disconnected','failed','closed'].includes(pc.iceConnectionState))
+      setTimeout(connect, 3000);
+  };
+
+  const offer  = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  const resp   = await fetch('http://192.168.4.90:8080/offer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+  });
+  const answer = await resp.json();
+  await pc.setRemoteDescription(answer);
+}
+
+function send(obj) {
+  if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj));
+}
+
+function setStatus(key, text) {
+  const map = { conn:'status-conn', drive:'status-drive', pt:'status-pt' };
+  const el = document.getElementById(map[key]);
+  if (el) el.textContent = text;
+}
+
+// ── Drive command map ──
+const speed = () => parseInt(document.getElementById('speed-slider').value) / 100;
+
+const DRIVE_CMDS = {
+  fwd:   () => ({ cmd:'drive', throttle:  speed(), steering:  0.0 }),
+  back:  () => ({ cmd:'drive', throttle: -speed(), steering:  0.0 }),
+  left:  () => ({ cmd:'drive', throttle:  speed() * 0.3, steering: -speed() }),
+  right: () => ({ cmd:'drive', throttle:  speed() * 0.3, steering:  speed() }),
+};
+
+// ── Drive D-pad ──
+document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn => {
+  const cmd = btn.dataset.cmd;
+  const press = e => {
+    e.preventDefault(); btn.classList.add('pressed');
+    const payload = DRIVE_CMDS[cmd] ? DRIVE_CMDS[cmd]() : null;
+    if (payload) { send(payload); setStatus('drive', 'Drive: ' + cmd); }
+  };
+  const release = e => {
+    e.preventDefault(); btn.classList.remove('pressed');
+    send({ cmd: 'stop' }); setStatus('drive', 'Drive: idle');
+  };
+  btn.addEventListener('pointerdown',  press);
+  btn.addEventListener('pointerup',    release);
+  btn.addEventListener('pointerleave', release);
+});
+
+// ── Pan-tilt D-pad ──
+const PT_CMDS = {
+  pt_up:    { cmd:'nudge_tilt', value:  5 },
+  pt_down:  { cmd:'nudge_tilt', value: -5 },
+  pt_left:  { cmd:'nudge_pan',  value: -5 },
+  pt_right: { cmd:'nudge_pan',  value:  5 },
+};
+
+document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn').forEach(btn => {
+  const cmd = btn.dataset.cmd;
+  const press = e => {
+    e.preventDefault(); btn.classList.add('pressed');
+    if (PT_CMDS[cmd]) { send(PT_CMDS[cmd]); setStatus('pt', 'PT: ' + cmd); }
+  };
+  const release = e => {
+    e.preventDefault(); btn.classList.remove('pressed');
+    setStatus('pt', 'PT: idle');
+  };
+  btn.addEventListener('pointerdown',  press);
+  btn.addEventListener('pointerup',    release);
+  btn.addEventListener('pointerleave', release);
+});
+
+// ── E-STOP ──
+document.getElementById('estop').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  send({ cmd: 'estop' });
+  setStatus('drive', 'Drive: E-STOP');
+});
+
+connect();

@@ -1,1 +1,0 @@
-[open https://www.youtube.com/watch?v=lXCd9lwkwkk&t=1640s](https://www.youtube.com/watch?v=lXCd9lwkwkk&t=1640s)
