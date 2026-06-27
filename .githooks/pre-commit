@@ -1,0 +1,51 @@
+#!/bin/bash
+
+echo "🔒 NanoBot Pre-Commit Guard Activated"
+
+# ----------------------------
+# 1. Detect changed files
+# ----------------------------
+CHANGED_FILES=$(git diff --cached --name-only)
+
+# ----------------------------
+# 2. Block dangerous deletions
+# ----------------------------
+if echo "$CHANGED_FILES" | grep -E "^nodes/.*/(.*)$" >/dev/null; then
+    echo "⚠️ Node-level modification detected"
+fi
+
+# ----------------------------
+# 3. Protect vault from Pi/Orin edits
+# ----------------------------
+HOSTNAME=$(hostname)
+
+if echo "$CHANGED_FILES" | grep "^vault/" >/dev/null; then
+    if [[ "$HOSTNAME" != *"IdeaPad"* ]]; then
+        echo "❌ Vault edits are only allowed from Lenovo control node"
+        exit 1
+    fi
+fi
+
+# ----------------------------
+# 4. Protect cross-node boundaries
+# ----------------------------
+if echo "$CHANGED_FILES" | grep -E "nodes/pi/.*nodes/orin|nodes/orin/.*nodes/pi" >/dev/null; then
+    echo "❌ Cross-node contamination detected"
+    exit 1
+fi
+
+# ----------------------------
+# 5. Prevent accidental mass commits
+# ----------------------------
+FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l)
+
+if [ "$FILE_COUNT" -gt 200 ]; then
+    echo "❌ Too many files in one commit ($FILE_COUNT). Abort."
+    exit 1
+fi
+
+# ----------------------------
+# 6. Allow commit
+# ----------------------------
+echo "✅ NanoBot commit validated"
+exit 0
