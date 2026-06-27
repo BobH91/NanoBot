@@ -1,0 +1,3 @@
+ROLE=controller
+NODE=lenovo
+ALLOW=vault,docs,hardware,scripts,nodes,tests
