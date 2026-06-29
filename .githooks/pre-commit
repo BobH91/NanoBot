@@ -1,51 +1,83 @@
 #!/bin/bash
 
-echo "🔒 NanoBot Pre-Commit Guard Activated"
+echo "🔐 NanoBot Firewall v3.3 (NODE + SHARED ISOLATION)"
 
 # ----------------------------
-# 1. Detect changed files
+# LOAD NODE IDENTITY
 # ----------------------------
-CHANGED_FILES=$(git diff --cached --name-only)
+IDENTITY_FILE=".node_identity"
+
+if [ ! -f "$IDENTITY_FILE" ]; then
+  echo "❌ BLOCKED: Missing .node_identity"
+  exit 1
+fi
+
+ROLE=$(grep "^ROLE=" "$IDENTITY_FILE" | cut -d= -f2)
+NODE=$(grep "^NODE=" "$IDENTITY_FILE" | cut -d= -f2)
+
+if [ -z "$ROLE" ] || [ -z "$NODE" ]; then
+  echo "❌ BLOCKED: Invalid .node_identity"
+  exit 1
+fi
+
+echo "✔ Node detected: $NODE ($ROLE)"
 
 # ----------------------------
-# 2. Block dangerous deletions
+# GET STAGED FILES
 # ----------------------------
-if echo "$CHANGED_FILES" | grep -E "^nodes/.*/(.*)$" >/dev/null; then
-    echo "⚠️ Node-level modification detected"
+FILES=$(git diff --cached --name-only)
+
+if [ -z "$FILES" ]; then
+  echo "✔ No staged changes"
+  exit 0
 fi
 
 # ----------------------------
-# 3. Protect vault from Pi/Orin edits
+# GLOBAL ALLOWLIST (system files)
 # ----------------------------
-HOSTNAME=$(hostname)
+GLOBAL_ALLOWED=(
+  "README.md"
+  ".gitignore"
+  ".githooks"
+  "LOCK_SYNC.md"
+  "bootstrap.sh"
+  "CHANGELOG.md"
+  ".node_identity"
+)
 
-if echo "$CHANGED_FILES" | grep "^vault/" >/dev/null; then
-    if [[ "$HOSTNAME" != *"IdeaPad"* ]]; then
-        echo "❌ Vault edits are only allowed from Lenovo control node"
-        exit 1
+is_global_allowed() {
+  for g in "${GLOBAL_ALLOWED[@]}"; do
+    if [[ "$1" == "$g" || "$1" == "$g/"* ]]; then
+      return 0
     fi
-fi
+  done
+  return 1
+}
 
 # ----------------------------
-# 4. Protect cross-node boundaries
+# ENFORCEMENT RULES
 # ----------------------------
-if echo "$CHANGED_FILES" | grep -E "nodes/pi/.*nodes/orin|nodes/orin/.*nodes/pi" >/dev/null; then
-    echo "❌ Cross-node contamination detected"
-    exit 1
-fi
+for f in $FILES; do
 
-# ----------------------------
-# 5. Prevent accidental mass commits
-# ----------------------------
-FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l)
+  # allow system files
+  if is_global_allowed "$f"; then
+    continue
+  fi
 
-if [ "$FILE_COUNT" -gt 200 ]; then
-    echo "❌ Too many files in one commit ($FILE_COUNT). Abort."
-    exit 1
-fi
+  # allow node-owned folder
+  if [[ "$f" == nodes/$NODE/* ]]; then
+    continue
+  fi
 
-# ----------------------------
-# 6. Allow commit
-# ----------------------------
-echo "✅ NanoBot commit validated"
+  # allow shared workspace (IMPORTANT FIX)
+  if [[ "$f" == nodes/shared/* ]]; then
+    continue
+  fi
+
+  echo "❌ BLOCKED: Node '$NODE' cannot modify: $f"
+  exit 1
+
+done
+
+echo "✅ NanoBot commit approved"
 exit 0
