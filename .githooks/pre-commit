@@ -1,83 +1,114 @@
 #!/bin/bash
 
-echo "🔐 NanoBot Firewall v3.3 (NODE + SHARED ISOLATION)"
+echo "🔐 NanoBot v6 Runtime Node Engine"
 
-# ----------------------------
-# LOAD NODE IDENTITY
-# ----------------------------
-IDENTITY_FILE=".node_identity"
+# -----------------------------
+# AUTO-DETECT NODE (TRUTH SOURCE)
+# -----------------------------
 
-if [ ! -f "$IDENTITY_FILE" ]; then
-  echo "❌ BLOCKED: Missing .node_identity"
-  exit 1
+HOST=$(hostname)
+
+ROLE="unknown"
+NODE="$HOST"
+
+# Default role inference from hostname
+case "$HOST" in
+    *pi*)
+        ROLE="pi"
+        ;;
+    *orin*)
+        ROLE="orin"
+        ;;
+    *idea*|*lenovo*|*nano*|*controller*)
+        ROLE="controller"
+        ;;
+esac
+
+# -----------------------------
+# OPTIONAL OVERRIDE FILE
+# -----------------------------
+if [ -f ".node_identity" ]; then
+    FILE_ROLE=$(grep "^ROLE=" .node_identity | cut -d= -f2)
+    FILE_NODE=$(grep "^NODE=" .node_identity | cut -d= -f2)
+
+    # only allow override if consistent (prevents spoofing)
+    if [[ "$FILE_ROLE" == "$ROLE" || "$FILE_ROLE" == "controller" ]]; then
+        ROLE="$FILE_ROLE"
+        NODE="$FILE_NODE"
+    fi
 fi
 
-ROLE=$(grep "^ROLE=" "$IDENTITY_FILE" | cut -d= -f2)
-NODE=$(grep "^NODE=" "$IDENTITY_FILE" | cut -d= -f2)
+echo "✔ Detected Node: $NODE"
+echo "✔ Role: $ROLE"
 
-if [ -z "$ROLE" ] || [ -z "$NODE" ]; then
-  echo "❌ BLOCKED: Invalid .node_identity"
-  exit 1
-fi
-
-echo "✔ Node detected: $NODE ($ROLE)"
-
-# ----------------------------
+# -----------------------------
 # GET STAGED FILES
-# ----------------------------
+# -----------------------------
 FILES=$(git diff --cached --name-only)
 
 if [ -z "$FILES" ]; then
-  echo "✔ No staged changes"
-  exit 0
+    echo "✔ No staged changes"
+    exit 0
 fi
 
-# ----------------------------
-# GLOBAL ALLOWLIST (system files)
-# ----------------------------
-GLOBAL_ALLOWED=(
-  "README.md"
-  ".gitignore"
-  ".githooks"
-  "LOCK_SYNC.md"
-  "bootstrap.sh"
-  "CHANGELOG.md"
-  ".node_identity"
-)
+# -----------------------------
+# RULE ENGINE
+# -----------------------------
+for file in $FILES; do
 
-is_global_allowed() {
-  for g in "${GLOBAL_ALLOWED[@]}"; do
-    if [[ "$1" == "$g" || "$1" == "$g/"* ]]; then
-      return 0
+    # system allowlist
+    case "$file" in
+        README.md|.gitignore|LOCK_SYNC.md|.githooks/*|bootstrap.sh|nodes/NODE_SPEC.md)
+            continue
+        ;;
+    esac
+
+    # shared rules (strict)
+    if [[ "$file" == nodes/shared/* ]]; then
+        if [[ "$file" == *.txt || "$file" == *test* ]]; then
+            echo "❌ BLOCKED: Invalid shared artifact: $file"
+            exit 1
+        fi
+        continue
     fi
-  done
-  return 1
-}
 
-# ----------------------------
-# ENFORCEMENT RULES
-# ----------------------------
-for f in $FILES; do
+    # PI rules
+    if [[ "$ROLE" == "pi" ]]; then
+        if [[ "$file" != nodes/pi/* && "$file" != nodes/shared/* ]]; then
+            echo "❌ BLOCKED: Pi cannot modify $file"
+            exit 1
+        fi
+    fi
 
-  # allow system files
-  if is_global_allowed "$f"; then
-    continue
-  fi
+    # ORIN rules
+    if [[ "$ROLE" == "orin" ]]; then
+        if [[ "$file" != nodes/orin/* && "$file" != nodes/shared/* ]]; then
+            echo "❌ BLOCKED: Orin cannot modify $file"
+            exit 1
+        fi
+    fi
 
-  # allow node-owned folder
-  if [[ "$f" == nodes/$NODE/* ]]; then
-    continue
-  fi
-
-  # allow shared workspace (IMPORTANT FIX)
-  if [[ "$f" == nodes/shared/* ]]; then
-    continue
-  fi
-
-  echo "❌ BLOCKED: Node '$NODE' cannot modify: $f"
-  exit 1
+    # CONTROLLER rules
+    if [[ "$ROLE" == "controller" ]]; then
+        if [[ "$file" == nodes/pi/runtime/* || "$file" == nodes/orin/runtime/* ]]; then
+            echo "❌ BLOCKED: Controller cannot modify runtime state"
+            exit 1
+        fi
+    fi
 
 done
 
-echo "✅ NanoBot commit approved"
+# -----------------------------
+# DRIFT CHECK (optional warning only)
+# -----------------------------
+git fetch origin -q
+
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main)
+
+if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "⚠ WARNING: Node is not synced with origin/main"
+fi
+
+echo "✅ NanoBot v6 commit approved"
 exit 0
