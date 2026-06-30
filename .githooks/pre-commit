@@ -1,48 +1,36 @@
 #!/bin/bash
 
-echo "🔐 NanoBot v6 Runtime Node Engine"
+echo "🔐 NanoBot v7 Runtime Firewall"
 
 # -----------------------------
-# AUTO-DETECT NODE (TRUTH SOURCE)
+# LOAD NODE FROM EXTERNAL SOURCE
 # -----------------------------
-
-HOST=$(hostname)
-
-ROLE="unknown"
-NODE="$HOST"
-
-# Default role inference from hostname
-case "$HOST" in
-    *pi*)
-        ROLE="pi"
-        ;;
-    *orin*)
-        ROLE="orin"
-        ;;
-    *idea*|*lenovo*|*nano*|*controller*)
-        ROLE="controller"
-        ;;
-esac
-
-# -----------------------------
-# OPTIONAL OVERRIDE FILE
-# -----------------------------
-if [ -f ".node_identity" ]; then
-    FILE_ROLE=$(grep "^ROLE=" .node_identity | cut -d= -f2)
-    FILE_NODE=$(grep "^NODE=" .node_identity | cut -d= -f2)
-
-    # only allow override if consistent (prevents spoofing)
-    if [[ "$FILE_ROLE" == "$ROLE" || "$FILE_ROLE" == "controller" ]]; then
-        ROLE="$FILE_ROLE"
-        NODE="$FILE_NODE"
-    fi
+if [ -f ~/.nanobot_identity ]; then
+    NODE=$(cat ~/.nanobot_identity | cut -d= -f2)
+else
+    echo "❌ Missing runtime identity"
+    exit 1
 fi
 
-echo "✔ Detected Node: $NODE"
+# -----------------------------
+# LOAD REGISTRY (AUTHORITATIVE)
+# -----------------------------
+REGISTRY="nodes/NODE_REGISTRY.json"
+
+if [ ! -f "$REGISTRY" ]; then
+    echo "❌ Missing node registry"
+    exit 1
+fi
+
+ROLE=$(grep -A2 "\"$NODE\"" $REGISTRY | grep "role" | cut -d: -f2 | tr -d ' ",')
+TRUST=$(grep -A3 "\"$NODE\"" $REGISTRY | grep "trust" | cut -d: -f2 | tr -d ' ",}')
+
+echo "✔ Node: $NODE"
 echo "✔ Role: $ROLE"
+echo "✔ Trust: $TRUST"
 
 # -----------------------------
-# GET STAGED FILES
+# ONLY STAGED FILES
 # -----------------------------
 FILES=$(git diff --cached --name-only)
 
@@ -52,63 +40,40 @@ if [ -z "$FILES" ]; then
 fi
 
 # -----------------------------
-# RULE ENGINE
+# RULE ENGINE v7
 # -----------------------------
 for file in $FILES; do
 
-    # system allowlist
     case "$file" in
-        README.md|.gitignore|LOCK_SYNC.md|.githooks/*|bootstrap.sh|nodes/NODE_SPEC.md)
+        README.md|.gitignore|LOCK_SYNC.md|.githooks/*|bootstrap.sh|nodes/NODE_REGISTRY.json)
             continue
         ;;
     esac
 
-    # shared rules (strict)
-    if [[ "$file" == nodes/shared/* ]]; then
-        if [[ "$file" == *.txt || "$file" == *test* ]]; then
-            echo "❌ BLOCKED: Invalid shared artifact: $file"
+    # controller can do anything EXCEPT runtime pollution
+    if [[ "$ROLE" == "controller" ]]; then
+        if [[ "$file" == nodes/*runtime* ]]; then
+            echo "❌ BLOCKED: Controller cannot modify runtime layer"
             exit 1
         fi
-        continue
     fi
 
-    # PI rules
+    # execution nodes strictly isolated
     if [[ "$ROLE" == "pi" ]]; then
         if [[ "$file" != nodes/pi/* && "$file" != nodes/shared/* ]]; then
-            echo "❌ BLOCKED: Pi cannot modify $file"
+            echo "❌ BLOCKED: Pi violation $file"
             exit 1
         fi
     fi
 
-    # ORIN rules
     if [[ "$ROLE" == "orin" ]]; then
         if [[ "$file" != nodes/orin/* && "$file" != nodes/shared/* ]]; then
-            echo "❌ BLOCKED: Orin cannot modify $file"
-            exit 1
-        fi
-    fi
-
-    # CONTROLLER rules
-    if [[ "$ROLE" == "controller" ]]; then
-        if [[ "$file" == nodes/pi/runtime/* || "$file" == nodes/orin/runtime/* ]]; then
-            echo "❌ BLOCKED: Controller cannot modify runtime state"
+            echo "❌ BLOCKED: Orin violation $file"
             exit 1
         fi
     fi
 
 done
 
-# -----------------------------
-# DRIFT CHECK (optional warning only)
-# -----------------------------
-git fetch origin -q
-
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main)
-
-if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "⚠ WARNING: Node is not synced with origin/main"
-fi
-
-echo "✅ NanoBot v6 commit approved"
+echo "✅ NanoBot v7 commit approved"
 exit 0

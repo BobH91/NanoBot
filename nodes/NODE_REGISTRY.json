@@ -1,0 +1,17 @@
+{
+  "controller": {
+    "node": "lenovo",
+    "role": "controller",
+    "trust": "root"
+  },
+  "pi": {
+    "node": "raspberrypi",
+    "role": "pi",
+    "trust": "execution"
+  },
+  "orin": {
+    "node": "orin",
+    "role": "orin",
+    "trust": "execution"
+  }
+}
