@@ -1,19 +1,30 @@
-import socket
-import threading
-import json
-import time
-import uuid
+import sys
+import os
 
-from shared.protocol.v83_protocol import (
+# -------------------------------------------------
+# FIX: ensure project root is in Python path
+# -------------------------------------------------
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+# -------------------------------------------------
+# Now safe to import project modules
+# -------------------------------------------------
+from nodes.shared.protocol.v83_protocol import (
     create_command,
     is_ack,
     is_result
 )
 
+import socket
+import threading
+import json
+import time
+
 PORT = 5050
 
 clients = []
-
 pending = {}
 lock = threading.Lock()
 
