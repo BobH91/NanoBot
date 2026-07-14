@@ -159,3 +159,18 @@ Commits should:
 
 Exceptions to this governance process must be explicitly identified and documented.
 
+---
+
+## 13. Documentation Maintenance
+
+Documentation must remain synchronized with verified project state.
+
+Documentation updates should be considered when:
+
+- architecture changes,
+- runtime behavior changes,
+- milestones are completed,
+- governance rules change,
+- hardware configuration changes.
+
+Documentation changes require the same inspection, verification, and commit process as code changes.
