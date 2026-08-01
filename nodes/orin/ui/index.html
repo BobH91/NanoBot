@@ -1,3 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>NanoBot Control</title>
+<style>
+  :root {
+    --bg:        #0b0f0d;
+    --panel:     #121713;
+    --line:      #223026;
+    --text:      #d8e6dc;
+    --dim:       #6d8477;
+    --accent:    #5ee6a0;
+    --accent-dim:#2f7a56;
+    --danger:    #ff4d4d;
+    --mono: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    height: 100%;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  body {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100dvh;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  /* ── Header / status bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  header .brand {
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  header .statuses { display: flex; gap: 18px; color: var(--dim); }
+  header .statuses span[data-live="true"] { color: var(--text); }
+
+  /* ── Main viewport: camera + side rail ── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    gap: 10px;
+    min-height: 0;
+  }
+
+  .viewport {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .viewport img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.95) contrast(1.02);
+  }
+  .viewport .no-signal {
+    position: absolute;
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .card .label {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  /* ── Pan/tilt mini-pad ── */
+  .pt-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    aspect-ratio: 1;
+  }
+
+  /* ── Speed slider ── */
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .speed-readout {
+    font-size: 20px;
+    color: var(--accent);
+    text-align: right;
+  }
+
+  /* ── E-STOP ── */
+  #estop {
+    flex: 1;
+    background: linear-gradient(180deg, #4a1414, #2a0b0b);
+    border: 2px solid var(--danger);
+    color: var(--danger);
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.15em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #estop.pressed, #estop:active {
+    background: var(--danger);
+    color: #1a0000;
+  }
+
+  /* ── Bottom drive D-pad ── */
+  footer {
+    display: flex;
+    justify-content: center;
+  }
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 74px);
+    grid-template-rows: repeat(3, 74px);
+    gap: 8px;
+  }
+  .dpad-btn {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    touch-action: none;
+  }
+  .dpad-btn.pressed {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .dpad-btn.ghost { visibility: hidden; }
+
+  /* Small pan/tilt pad buttons reuse .dpad-btn but smaller */
+  #pantilt-pad .dpad-btn { font-size: 15px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+  <header>
+    <span class="brand">NANOBOT</span>
+    <div class="statuses">
+      <span id="status-conn">🔴 Disconnected</span>
+      <span id="status-drive">Drive: idle</span>
+      <span id="status-pt">PT: idle</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="viewport">
+      <img id="camera-feed" src="/stream" alt="camera feed"
+           onerror="this.style.display='none'; document.getElementById('no-signal').style.display='block';">
+      <div class="no-signal" id="no-signal" style="display:none;">NO SIGNAL</div>
+    </div>
+
+    <div class="rail">
+      <div class="card">
+        <div class="label">Pan / Tilt</div>
+        <div class="pt-grid" id="pantilt-pad">
+          <div></div><div class="dpad-btn" data-cmd="pt_up">▲</div><div></div>
+          <div class="dpad-btn" data-cmd="pt_left">◀</div><div></div><div class="dpad-btn" data-cmd="pt_right">▶</div>
+          <div></div><div class="dpad-btn" data-cmd="pt_down">▼</div><div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Speed</div>
+        <input type="range" id="speed-slider" min="10" max="100" value="60">
+        <div class="speed-readout" id="speed-readout">60%</div>
+      </div>
+
+      <div class="card" style="flex:1; display:flex;">
+        <button id="estop">E-STOP</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="dpad" id="drive-pad">
+      <div class="dpad-btn ghost"></div>
+      <div class="dpad-btn" data-cmd="fwd">▲</div>
+      <div class="dpad-btn ghost"></div>
+      <div class="dpad-btn" data-cmd="left">◀</div>
+      <div class="dpad-btn ghost"></div>
+      <div class="dpad-btn" data-cmd="right">▶</div>
+      <div class="dpad-btn ghost"></div>
+      <div class="dpad-btn" data-cmd="back">▼</div>
+      <div class="dpad-btn ghost"></div>
+    </div>
+  </footer>
+
+<script>
 // ── WebRTC setup ──
 let pc = null;
 let dc = null;
@@ -51,8 +290,15 @@ const DRIVE_CMDS = {
   right: () => ({ cmd:'drive', throttle:  speed() * 0.3, steering:  speed() }),
 };
 
+// ── Speed readout ──
+const speedSlider = document.getElementById('speed-slider');
+const speedReadout = document.getElementById('speed-readout');
+speedSlider.addEventListener('input', () => {
+  speedReadout.textContent = speedSlider.value + '%';
+});
+
 // ── Drive D-pad ──
-document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn => {
+document.getElementById('drive-pad').querySelectorAll('.dpad-btn[data-cmd]').forEach(btn => {
   const cmd = btn.dataset.cmd;
   const press = e => {
     e.preventDefault(); btn.classList.add('pressed');
@@ -76,7 +322,7 @@ const PT_CMDS = {
   pt_right: { cmd:'nudge_pan',  value:  5 },
 };
 
-document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn').forEach(btn => {
+document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn[data-cmd]').forEach(btn => {
   const cmd = btn.dataset.cmd;
   const press = e => {
     e.preventDefault(); btn.classList.add('pressed');
@@ -97,5 +343,11 @@ document.getElementById('estop').addEventListener('pointerdown', e => {
   send({ cmd: 'estop' });
   setStatus('drive', 'Drive: E-STOP');
 });
+document.getElementById('estop').addEventListener('pointerup', e => {
+  document.getElementById('estop').classList.remove('pressed');
+});
 
 connect();
+</script>
+</body>
+</html>
