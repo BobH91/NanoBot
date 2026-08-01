@@ -24,6 +24,7 @@ import lgpio
 from adafruit_pca9685 import PCA9685
 import board
 import busio
+import logging
 
 import config
 
@@ -190,6 +191,8 @@ class MotorDriver:
     # -- Hardware write ---------------------------
 
     def _apply(self, left: float, right: float) -> None:
+
+        logging.info("APPLY left=%+.3f right=%+.3f", left, right)        
         """
         Write direction and duty cycle to hardware.
 
@@ -203,6 +206,8 @@ class MotorDriver:
         self._write_motor(CH_RIGHT, GPIO_DIR_RIGHT, phys_right)
 
     def _write_motor(self, pwm_ch: int, dir_gpio: int, value: float) -> None:
+
+
         """
         Write one motor channel.
 
@@ -212,6 +217,22 @@ class MotorDriver:
         """
         duty = min(abs(value), MAX_DUTY)
         direction = 1 if value > 0 else 0
+
+        logging.info(
+            "WRITE_MOTOR pwm=%d dir_gpio=%d value=%+.3f duty=%d direction=%d",
+            pwm_ch,
+            dir_gpio,
+            value,
+            int(duty * _PCA_MAX_TICKS),
+            direction,
+        )
+
+        logging.info(
+            "DIR gpio=%d value=%+.3f direction=%d",
+            dir_gpio,
+            value,
+            direction,
+        )
 
         lgpio.gpio_write(self._gpio_handle, dir_gpio, direction)
 
