@@ -42,6 +42,7 @@ GPIO_DIR_LEFT      = config.GPIO_DIR_LEFT   # lgpio GPIO for left  direction
 GPIO_DIR_RIGHT     = config.GPIO_DIR_RIGHT  # lgpio GPIO for right direction
 
 MOTOR_RIGHT_INVERT = config.MOTOR_RIGHT_INVERT   # mirrors physical mounting
+MOTOR_LEFT_INVERT  = config.MOTOR_LEFT_INVERT    # mirrors physical mounting
 
 # ----------------------------------------------
 # Tuning parameters
@@ -199,10 +200,11 @@ class MotorDriver:
         Positive value -> forward for that side.
         MOTOR_RIGHT_INVERT flips the physical right-motor direction signal.
         """
-        # Physical direction: right motor wired mirror-image
+        # Physical direction: motors wired mirror-image relative to each other
+        phys_left  = -left  if MOTOR_LEFT_INVERT  else left
         phys_right = -right if MOTOR_RIGHT_INVERT else right
 
-        self._write_motor(CH_LEFT,  GPIO_DIR_LEFT,  left)
+        self._write_motor(CH_LEFT,  GPIO_DIR_LEFT,  phys_left)
         self._write_motor(CH_RIGHT, GPIO_DIR_RIGHT, phys_right)
 
     def _write_motor(self, pwm_ch: int, dir_gpio: int, value: float) -> None:
