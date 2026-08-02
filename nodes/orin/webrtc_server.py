@@ -58,7 +58,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/home/bob/nanobot/logs/webrtc_server.log"),
+        logging.FileHandler("/home/bob/NanoBot/nodes/orin/logs/webrtc_server.log"),
     ],
 )
 log = logging.getLogger("webrtc_server")
@@ -130,13 +130,15 @@ class CameraTrack(VideoStreamTrack):
 # DataChannel command handler
 # ──────────────────────────────────────────────
 def handle_command(raw: str, channel) -> None:
+    log.info("COMMAND RECEIVED: %s", raw)
     """Parse and dispatch a DataChannel message from the browser."""
     try:
         obj = json.loads(raw)
+        log.info("BROWSER COMMAND: %s", obj)
     except json.JSONDecodeError:
         log.warning("Bad JSON on DataChannel: %r", raw)
         return
-
+    log.info("BROWSER COMMAND: %s", obj)
     cmd = obj.get("cmd", "").lower()
 
     # E-STOP blocks all motion commands
@@ -203,62 +205,133 @@ relay = MediaRelay()
 
 async def offer_handler(request: web.Request) -> web.Response:
     """Handle SDP offer from browser, return SDP answer."""
-    params = await request.json()
-    offer  = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
-    pc = RTCPeerConnection()
-    pcs.add(pc)
-    log.info("New peer connection (total: %d)", len(pcs))
+    try:
+        log.info("OFFER REQUEST RECEIVED")
 
-    # Add camera track
-    camera_track = CameraTrack()
-    pc.addTrack(relay.subscribe(camera_track))
+        params = await request.json()
 
-    # Status push loop (runs while connection is open)
-    status_channel = None
+        offer = RTCSessionDescription(
+            sdp=params["sdp"],
+            type=params["type"]
+        )
 
-    @pc.on("datachannel")
-    def on_datachannel(channel):
-        nonlocal status_channel
-        log.info("DataChannel opened: %s", channel.label)
+        log.info("SDP OFFER PARSED")
 
-        if channel.label == "control":
-            status_channel = channel
+        pc = RTCPeerConnection()
+        pcs.add(pc)
 
-            # Start periodic status push
-            asyncio.ensure_future(_status_loop(channel))
+        log.info(
+            "New peer connection (total: %d)",
+            len(pcs)
+        )
 
-            @channel.on("message")
-            def on_message(message):
-                handle_command(message, channel)
+        camera_track = CameraTrack()
+        pc.addTrack(relay.subscribe(camera_track))
+        for t in pc.getTransceivers():
+            log.info(
+                "TRANSCEIVER AFTER ADD: kind=%s direction=%s currentDirection=%s",
+                t.kind,
+                t.direction,
+                t.currentDirection
+            )
 
-        elif channel.label == "estop":
-            @channel.on("message")
-            def on_estop_message(message):
-                handle_command(message, channel)
 
-    @pc.on("connectionstatechange")
-    async def on_connectionstatechange():
-        log.info("Connection state: %s", pc.connectionState)
-        if pc.connectionState in ("failed", "closed", "disconnected"):
-            # Stop motors on disconnect
-            if not estop_is_active():
-                get_client().stop()
-            pcs.discard(pc)
-            await pc.close()
+        status_channel = None
 
-    await pc.setRemoteDescription(offer)
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
+        @pc.on("datachannel")
+        def on_datachannel(channel):
+            nonlocal status_channel
 
-    return web.Response(
-        content_type="application/json",
-        text=json.dumps({
-            "sdp":  pc.localDescription.sdp,
-            "type": pc.localDescription.type,
-        }),
-    )
+            log.info(
+                "DataChannel opened: %s",
+                channel.label
+            )
 
+            if channel.label == "control":
+                status_channel = channel
+
+                asyncio.ensure_future(
+                    _status_loop(channel)
+                )
+
+                @channel.on("message")
+                def on_message(message):
+                    handle_command(
+                        message,
+                        channel
+                    )
+
+            elif channel.label == "estop":
+
+                @channel.on("message")
+                def on_estop_message(message):
+                    handle_command(
+                        message,
+                        channel
+                    )
+
+        @pc.on("connectionstatechange")
+        async def on_connectionstatechange():
+
+            log.info(
+                "Connection state: %s",
+                pc.connectionState
+            )
+
+            if pc.connectionState in (
+                "failed",
+                "closed",
+                "disconnected"
+            ):
+
+                if not estop_is_active():
+                    get_client().stop()
+
+                pcs.discard(pc)
+
+                await pc.close()
+
+        log.info("SETTING REMOTE DESCRIPTION")
+
+        await pc.setRemoteDescription(
+            offer
+        )
+
+        log.info("CREATING ANSWER")
+
+        answer = await pc.createAnswer()
+
+        log.info("SETTING LOCAL DESCRIPTION")
+
+        await pc.setLocalDescription(
+            answer
+        )
+
+        log.info(
+            "WEBRTC ANSWER CREATED SUCCESSFULLY"
+        )
+
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps(
+                {
+                    "sdp":
+                        pc.localDescription.sdp,
+
+                    "type":
+                        pc.localDescription.type,
+                }
+            ),
+        )
+
+    except Exception:
+
+        log.exception(
+            "WEBRTC OFFER FAILURE"
+        )
+
+        raise
 
 async def _status_loop(channel) -> None:
     """Push status to browser every second."""
@@ -285,6 +358,9 @@ async def _status_loop(channel) -> None:
             log.debug("Status loop error: %s", exc)
             break
 
+async def ui_handler(request: web.Request) -> web.Response:
+    """Serve NanoBot operator interface."""
+    return web.FileResponse("nodes/orin/ui/index.html")
 
 async def status_handler(request: web.Request) -> web.Response:
     """Simple HTTP status endpoint for health checks."""
@@ -333,6 +409,8 @@ async def on_shutdown(app: web.Application) -> None:
 # ──────────────────────────────────────────────
 def main() -> None:
     app = web.Application()
+    app.router.add_get("/",       ui_handler)
+
     app.router.add_post("/offer",  offer_handler)
     app.router.add_get("/status",  status_handler)
     app.on_startup.append(on_startup)
