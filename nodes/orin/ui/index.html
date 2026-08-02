@@ -164,6 +164,13 @@ const DRIVE_CMDS = {
   right: () => ({ cmd:'drive', throttle:  speed() * 0.3, steering:  speed() }),
 };
 
+// ── Speed readout ──
+const speedSlider = document.getElementById('speed-slider');
+const speedReadout = document.getElementById('speed-readout');
+speedSlider.addEventListener('input', () => {
+  speedReadout.textContent = speedSlider.value + '%';
+});
+
 // ── Drive D-pad ──
 // ── Drive D-pad ──
 let driveTimer = null;
@@ -215,7 +222,7 @@ const PT_CMDS = {
   pt_right: { cmd:'nudge_pan',  value:  5 },
 };
 
-document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn').forEach(btn => {
+document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn[data-cmd]').forEach(btn => {
   const cmd = btn.dataset.cmd;
   const press = e => {
     e.preventDefault(); btn.classList.add('pressed');
@@ -235,6 +242,9 @@ document.getElementById('estop').addEventListener('pointerdown', e => {
   e.preventDefault();
   send({ cmd: 'estop' });
   setStatus('drive', 'Drive: E-STOP');
+});
+document.getElementById('estop').addEventListener('pointerup', e => {
+  document.getElementById('estop').classList.remove('pressed');
 });
 
 connect();

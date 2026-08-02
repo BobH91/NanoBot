@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-webrtc_server.py — Nanobot WebRTC server (Orin Nano)
+webrtc_server.py - Nanobot WebRTC server (Orin Nano)
 Serves:
   - HTTP signalling endpoint  POST /offer  (SDP exchange)
   - HTTP status endpoint      GET  /status
-  - WebRTC video track        (camera frames → browser)
-  - WebRTC DataChannel        (browser → drive / pan/tilt commands)
+  - WebRTC video track        (camera frames -> browser)
+  - WebRTC DataChannel        (browser -> drive / pan/tilt commands)
 
-DataChannel JSON protocol (browser → Nano):
+DataChannel JSON protocol (browser -> Nano):
   {"cmd": "drive",  "throttle": 0.5, "steering": 0.0}
   {"cmd": "pan",    "value": 30.0}
   {"cmd": "tilt",   "value": -15.0}
@@ -16,7 +16,7 @@ DataChannel JSON protocol (browser → Nano):
   {"cmd": "estop_reset"}
   {"cmd": "ping"}
 
-DataChannel JSON protocol (Nano → browser):
+DataChannel JSON protocol (Nano -> browser):
   {"event": "pong"}
   {"event": "estop", "active": true|false}
   {"event": "status", "pan": 0.0, "tilt": 0.0, "fps": 14.9, "connected": true}
@@ -26,6 +26,7 @@ import asyncio
 import fractions
 import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -41,18 +42,21 @@ from camera import get_grabber, shutdown_grabber
 from servo import get_servos, shutdown_servos
 from tcp_client import get_client, shutdown_client
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # Configuration
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 HTTP_HOST       = "0.0.0.0"
 HTTP_PORT       = 8080
 VIDEO_CLOCKRATE = 90000
 VIDEO_FPS       = 30
 LOG_LEVEL       = logging.INFO
 
-# ──────────────────────────────────────────────
+UI_DIR          = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
+MJPEG_BOUNDARY  = "nanobotframe"
+
+# ----------------------------------------------
 # Logging
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 logging.basicConfig(
     level=LOG_LEVEL,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -63,9 +67,9 @@ logging.basicConfig(
 )
 log = logging.getLogger("webrtc_server")
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # E-STOP state (global, latching)
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 _estop_active = False
 _estop_lock   = threading.Lock()
 
@@ -91,9 +95,9 @@ def estop_is_active() -> bool:
         return _estop_active
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # Camera video track
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 class CameraTrack(VideoStreamTrack):
     """
     Pulls frames from FrameGrabber and feeds them into the WebRTC pipeline.
@@ -118,7 +122,7 @@ class CameraTrack(VideoStreamTrack):
             import numpy as np
             frame_bgr = __import__("numpy").zeros((544, 960, 3), dtype="uint8")
 
-        # BGR → VideoFrame (aiortc expects RGB or YUV; we give BGR, av handles it)
+        # BGR -> VideoFrame (aiortc expects RGB or YUV; we give BGR, av handles it)
         vf = VideoFrame.from_ndarray(frame_bgr, format="bgr24")
         vf.pts      = self._pts
         vf.time_base = self._time_base
@@ -126,9 +130,9 @@ class CameraTrack(VideoStreamTrack):
         return vf
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # DataChannel command handler
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 def handle_command(raw: str, channel) -> None:
     log.info("COMMAND RECEIVED: %s", raw)
     """Parse and dispatch a DataChannel message from the browser."""
@@ -196,9 +200,9 @@ def _send(channel, obj: dict) -> None:
         log.debug("DataChannel send error: %s", exc)
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # Peer connection manager
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 pcs: Set[RTCPeerConnection] = set()
 relay = MediaRelay()
 
@@ -362,6 +366,45 @@ async def ui_handler(request: web.Request) -> web.Response:
     """Serve NanoBot operator interface."""
     return web.FileResponse("nodes/orin/ui/index.html")
 
+async def index_handler(request: web.Request) -> web.Response:
+    """Serve the control-panel page."""
+    return web.FileResponse(os.path.join(UI_DIR, "index.html"))
+
+
+async def stream_handler(request: web.Request) -> web.StreamResponse:
+    """
+    MJPEG fallback stream for browsers where the WebRTC video track is
+    unreliable (notably iPad Safari). Not used for control - only for
+    the live camera image. Control still goes over the DataChannel.
+    """
+    grabber = get_grabber()
+    response = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
+            "Cache-Control": "no-cache",
+            "Connection": "close",
+        },
+    )
+    await response.prepare(request)
+
+    try:
+        while True:
+            jpeg = grabber.get_jpeg()
+            if jpeg is not None:
+                await response.write(
+                    f"--{MJPEG_BOUNDARY}\r\n"
+                    "Content-Type: image/jpeg\r\n"
+                    f"Content-Length: {len(jpeg)}\r\n\r\n".encode()
+                    + jpeg
+                    + b"\r\n"
+                )
+            await asyncio.sleep(1 / VIDEO_FPS)
+    except (asyncio.CancelledError, ConnectionResetError):
+        pass
+    return response
+
+
 async def status_handler(request: web.Request) -> web.Response:
     """Simple HTTP status endpoint for health checks."""
     grabber = get_grabber()
@@ -379,11 +422,11 @@ async def status_handler(request: web.Request) -> web.Response:
     )
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # Startup / shutdown
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 async def on_startup(app: web.Application) -> None:
-    log.info("Starting subsystems …")
+    log.info("Starting subsystems ...")
     get_grabber()   # starts camera capture thread
     get_servos()    # centres servos
     get_client()    # connects to RPi TCP server
@@ -391,7 +434,7 @@ async def on_startup(app: web.Application) -> None:
 
 
 async def on_shutdown(app: web.Application) -> None:
-    log.info("Shutting down …")
+    log.info("Shutting down ...")
     # Close all peer connections
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
@@ -404,15 +447,17 @@ async def on_shutdown(app: web.Application) -> None:
     log.info("Shutdown complete.")
 
 
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 # Main
-# ──────────────────────────────────────────────
+# ----------------------------------------------
 def main() -> None:
     app = web.Application()
     app.router.add_get("/",       ui_handler)
 
     app.router.add_post("/offer",  offer_handler)
     app.router.add_get("/status",  status_handler)
+    app.router.add_get("/stream",  stream_handler)
+    app.router.add_static("/ui/",  UI_DIR)
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
 
@@ -428,7 +473,7 @@ def main() -> None:
     log.info("Offer endpoint: POST http://192.168.4.90:%d/offer", HTTP_PORT)
 
     def _stop(sig, _):
-        log.info("Signal %d received — stopping.", sig)
+        log.info("Signal %d received - stopping.", sig)
         loop.call_soon_threadsafe(loop.stop)
 
     signal.signal(signal.SIGINT,  _stop)

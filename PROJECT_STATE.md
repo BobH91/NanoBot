@@ -182,3 +182,40 @@ Prevent architectural confusion
 Establish a verified baseline before UI development
 Ensure future changes are grounded in actual runtime behavior
 Separate active vs experimental systems clearly
+
+---
+
+# 10. HISTORICAL MILESTONE LOCK RECORD
+
+The following milestones represent completed historical baselines.
+
+These milestones are LOCKED COMPLETE.
+
+Locked milestones:
+
+- Must not be reopened during normal development.
+- Require explicit authorization before modification.
+- Serve as historical reference points for future work.
+
+| Milestone | Status |
+|---|---|
+| Milestone 0 — System Inventory & Consolidation | LOCKED COMPLETE |
+| Milestone 1 — Preservation Planning | LOCKED COMPLETE |
+| Milestone 2 — Repository Reconciliation | LOCKED COMPLETE |
+| Milestone 3 — Multi-Node Runtime Verification | LOCKED COMPLETE |
+| Milestone 4 — Verification / Stabilization | LOCKED COMPLETE |
+| Milestone 4.5 — Documentation Governance | LOCKED COMPLETE |
+
+Current development phase:
+
+Milestone 5 — Runtime Capability Hardening
+
+Status:
+
+LOCKED FOR IMPLEMENTATION PLANNING
+
+Lock policy:
+
+Historical milestone states remain preserved.
+Future development proceeds through new milestones.
+Reopening a locked milestone requires documented authorization.
