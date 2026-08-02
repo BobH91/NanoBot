@@ -1,3 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NanoBot Control</title>
+
+<style>
+* { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+body {
+    font-family: sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+}
+
+#video {
+    width: 960px;
+    max-width: 95%;
+    background: black;
+}
+
+.panel {
+    margin: 20px;
+}
+
+button {
+    width: 70px;
+    height: 50px;
+    margin: 5px;
+    font-size: 20px;
+}
+
+.status {
+    margin: 10px;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>NanoBot</h1>
+
+<div class="status">
+<div id="status-conn">Connecting...</div>
+<div id="status-drive">Drive idle</div>
+<div id="status-pt">PT idle</div>
+</div>
+
+
+<video id="video" autoplay playsinline></video>
+
+
+<div class="panel">
+
+<h2>Speed</h2>
+
+<input id="speed-slider"
+type="range"
+min="0"
+max="100"
+value="50">
+
+</div>
+
+
+<div class="panel" id="drive-pad">
+
+<h2>Drive</h2>
+
+<div>
+<button class="dpad-btn" data-cmd="fwd">▲</button>
+</div>
+
+<div>
+<button class="dpad-btn" data-cmd="left">◀</button>
+<button class="dpad-btn" data-cmd="back">▼</button>
+<button class="dpad-btn" data-cmd="right">▶</button>
+</div>
+
+</div>
+
+
+<div class="panel" id="pantilt-pad">
+
+<h2>Camera</h2>
+
+<div>
+<button class="dpad-btn" data-cmd="pt_up">▲</button>
+</div>
+
+<div>
+<button class="dpad-btn" data-cmd="pt_left">◀</button>
+<button class="dpad-btn" data-cmd="pt_down">▼</button>
+<button class="dpad-btn" data-cmd="pt_right">▶</button>
+</div>
+
+</div>
+
+
+<button id="estop">
+E-STOP
+</button>
+
+
+<script>
 // ── WebRTC setup ──
 let pc = null;
 let dc = null;
@@ -5,7 +111,14 @@ let dc = null;
 async function connect() {
   setStatus('conn', '🟡 Connecting…');
   pc = new RTCPeerConnection();
-  dc = pc.createDataChannel('control');
+
+  pc.addTransceiver("video", { direction: "recvonly" });
+
+  pc.ontrack = (event) => {
+    document.getElementById("video").srcObject = event.streams[0];
+  };
+
+  dc = pc.createDataChannel('control'); 
 
   dc.onopen  = () => setStatus('conn', '🟢 Connected');
   dc.onclose = () => { setStatus('conn', '🔴 Disconnected'); setTimeout(connect, 3000); };
@@ -52,19 +165,45 @@ const DRIVE_CMDS = {
 };
 
 // ── Drive D-pad ──
+// ── Drive D-pad ──
+let driveTimer = null;
+
 document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn => {
   const cmd = btn.dataset.cmd;
-  const press = e => {
-    e.preventDefault(); btn.classList.add('pressed');
+
+  const sendDrive = () => {
     const payload = DRIVE_CMDS[cmd] ? DRIVE_CMDS[cmd]() : null;
-    if (payload) { send(payload); setStatus('drive', 'Drive: ' + cmd); }
+    if (payload) {
+      send(payload);
+      setStatus('drive', 'Drive: ' + cmd);
+    }
   };
+
+  const press = e => {
+    e.preventDefault();
+    btn.classList.add('pressed');
+
+    sendDrive();
+
+    if (driveTimer) clearInterval(driveTimer);
+    driveTimer = setInterval(sendDrive, 100);
+  };
+
   const release = e => {
-    e.preventDefault(); btn.classList.remove('pressed');
-    send({ cmd: 'stop' }); setStatus('drive', 'Drive: idle');
+    e.preventDefault();
+    btn.classList.remove('pressed');
+
+    if (driveTimer) {
+      clearInterval(driveTimer);
+      driveTimer = null;
+    }
+
+    send({ cmd: 'stop' });
+    setStatus('drive', 'Drive: idle');
   };
-  btn.addEventListener('pointerdown',  press);
-  btn.addEventListener('pointerup',    release);
+
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointerup', release);
   btn.addEventListener('pointerleave', release);
 });
 
@@ -99,3 +238,7 @@ document.getElementById('estop').addEventListener('pointerdown', e => {
 });
 
 connect();
+</script>
+
+</body>
+</html>
