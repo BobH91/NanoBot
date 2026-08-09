@@ -57,6 +57,7 @@ MJPEG_BOUNDARY  = "nanobotframe"
 # ----------------------------------------------
 # Logging
 # ----------------------------------------------
+os.makedirs("/home/bob/NanoBot/nodes/orin/logs", exist_ok=True)
 logging.basicConfig(
     level=LOG_LEVEL,
     format="%(asctime)s [%(levelname)s] %(message)s",
