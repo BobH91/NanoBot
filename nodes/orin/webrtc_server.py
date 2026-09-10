@@ -406,6 +406,24 @@ async def stream_handler(request: web.Request) -> web.StreamResponse:
     return response
 
 
+async def snapshot_handler(request: web.Request) -> web.Response:
+    """Return one current camera JPEG from the existing FrameGrabber."""
+    jpeg = get_grabber().get_jpeg()
+
+    if jpeg is None:
+        return web.Response(
+            status=503,
+            text="Camera frame unavailable",
+        )
+
+    return web.Response(
+        status=200,
+        body=jpeg,
+        content_type="image/jpeg",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 async def status_handler(request: web.Request) -> web.Response:
     """Simple HTTP status endpoint for health checks."""
     grabber = get_grabber()
@@ -457,6 +475,7 @@ def main() -> None:
 
     app.router.add_post("/offer",  offer_handler)
     app.router.add_get("/status",  status_handler)
+    app.router.add_get("/snapshot", snapshot_handler)
     app.router.add_get("/stream",  stream_handler)
     app.router.add_static("/ui/",  UI_DIR)
     app.on_startup.append(on_startup)
