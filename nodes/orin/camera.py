@@ -22,8 +22,8 @@ import numpy as np
 # Configuration
 # ──────────────────────────────────────────────
 DEVICE          = "/dev/video0"
-CAPTURE_WIDTH   = 960
-CAPTURE_HEIGHT  = 544
+CAPTURE_WIDTH   = 1280
+CAPTURE_HEIGHT  = 720
 CAPTURE_FPS     = 30
 FOURCC          = "MJPG"
 
@@ -173,7 +173,6 @@ class FrameGrabber:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         cap.set(cv2.CAP_PROP_FPS,          self._fps)
         # Keep internal buffer minimal — we always want the latest frame
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         # Confirm what the driver actually gave us
         actual_w   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

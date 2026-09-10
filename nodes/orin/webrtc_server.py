@@ -121,7 +121,7 @@ class CameraTrack(VideoStreamTrack):
         if frame_bgr is None:
             # Send a black frame if camera not ready
             import numpy as np
-            frame_bgr = __import__("numpy").zeros((544, 960, 3), dtype="uint8")
+            frame_bgr = __import__("numpy").zeros((720, 1280, 3), dtype="uint8")
 
         # BGR -> VideoFrame (aiortc expects RGB or YUV; we give BGR, av handles it)
         vf = VideoFrame.from_ndarray(frame_bgr, format="bgr24")
