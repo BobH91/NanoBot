@@ -1,0 +1,139 @@
+{
+  "verification_id": "C-004",
+  "status": "COMPLETED_ABSOLUTE_ACCURACY_NOT_ESTABLISHED",
+  "purpose": "Controlled AprilTag absolute-distance experiment",
+  "machine": "Orin Nano",
+  "tag_family": "tag36h11",
+  "tag_id": 0,
+  "tag_size_m": 0.150,
+  "calibration_id": "C-002",
+  "image_size": [1280, 720],
+  "frames_used": 10,
+  "physical_reference": {
+    "distance_m": 1.133,
+    "distance_cm": 113.3,
+    "reference": "lens center to physical center of Tag 0",
+    "measurement_type": "straight-line tape measure",
+    "precision_status": "approximate"
+  },
+  "pose_results": [
+    {
+      "frame": 1,
+      "x_m": -0.223772,
+      "y_m": 0.187162,
+      "z_m": 1.069151,
+      "distance_m": 1.108236,
+      "distance_cm": 110.824,
+      "hamming": 0,
+      "decision_margin": 71.08
+    },
+    {
+      "frame": 2,
+      "x_m": -0.223782,
+      "y_m": 0.187148,
+      "z_m": 1.069136,
+      "distance_m": 1.108221,
+      "distance_cm": 110.822,
+      "hamming": 0,
+      "decision_margin": 73.39
+    },
+    {
+      "frame": 3,
+      "x_m": -0.223780,
+      "y_m": 0.187148,
+      "z_m": 1.069139,
+      "distance_m": 1.108223,
+      "distance_cm": 110.822,
+      "hamming": 0,
+      "decision_margin": 74.25
+    },
+    {
+      "frame": 4,
+      "x_m": -0.223754,
+      "y_m": 0.187145,
+      "z_m": 1.069057,
+      "distance_m": 1.108139,
+      "distance_cm": 110.814,
+      "hamming": 0,
+      "decision_margin": 74.93
+    },
+    {
+      "frame": 5,
+      "x_m": -0.223755,
+      "y_m": 0.187150,
+      "z_m": 1.069075,
+      "distance_m": 1.108158,
+      "distance_cm": 110.816,
+      "hamming": 0,
+      "decision_margin": 74.91
+    },
+    {
+      "frame": 6,
+      "x_m": -0.223708,
+      "y_m": 0.187113,
+      "z_m": 1.068827,
+      "distance_m": 1.107903,
+      "distance_cm": 110.790,
+      "hamming": 0,
+      "decision_margin": 74.62
+    },
+    {
+      "frame": 7,
+      "x_m": -0.223792,
+      "y_m": 0.187154,
+      "z_m": 1.069178,
+      "distance_m": 1.108265,
+      "distance_cm": 110.826,
+      "hamming": 0,
+      "decision_margin": 75.23
+    },
+    {
+      "frame": 8,
+      "x_m": -0.223851,
+      "y_m": 0.187195,
+      "z_m": 1.069388,
+      "distance_m": 1.108487,
+      "distance_cm": 110.849,
+      "hamming": 0,
+      "decision_margin": 75.74
+    },
+    {
+      "frame": 9,
+      "x_m": -0.223827,
+      "y_m": 0.187188,
+      "z_m": 1.069273,
+      "distance_m": 1.108369,
+      "distance_cm": 110.837,
+      "hamming": 0,
+      "decision_margin": 75.88
+    },
+    {
+      "frame": 10,
+      "x_m": -0.223729,
+      "y_m": 0.187132,
+      "z_m": 1.068953,
+      "distance_m": 1.108032,
+      "distance_cm": 110.803,
+      "hamming": 0,
+      "decision_margin": 75.82
+    }
+  ],
+  "statistics": {
+    "valid_measurements": 10,
+    "mean_distance_cm": 110.820,
+    "min_distance_cm": 110.790,
+    "max_distance_cm": 110.849,
+    "range_cm": 0.058,
+    "mean_difference_cm": -2.480,
+    "mean_absolute_difference_cm": 2.480,
+    "mean_percent_difference": 2.189
+  },
+  "interpretation": {
+    "pose_repeatability": "verified",
+    "absolute_accuracy": "not established",
+    "reason": "The independent physical reference was measured with a tape measure and is therefore treated as approximate. The observed 2.480 cm difference is not sufficient evidence to modify the locked C-002 calibration.",
+    "calibration_changed": false,
+    "camera_configuration_changed": false,
+    "runtime_source_changed": false
+  }
+}
