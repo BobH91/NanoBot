@@ -1,0 +1,63 @@
+{
+  "calibration_id": "C-002",
+  "status": "COMPUTED_AND_REPRODUCED",
+  "opencv_version": "4.13.0",
+  "image_size": [
+    1280,
+    720
+  ],
+  "images_used": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "images_used_count": 15,
+  "charuco_corners_per_image": 24,
+  "board": {
+    "squares_x": 7,
+    "squares_y": 5,
+    "square_size_m": 0.03,
+    "marker_size_m": 0.022,
+    "dictionary": "DICT_4X4_50"
+  },
+  "rms_reprojection_error_px": 0.26411334501081274,
+  "mean_per_image_error_px": 0.05285080475929739,
+  "min_per_image_error_px": 0.04143441186216483,
+  "max_per_image_error_px": 0.08292917062850931,
+  "camera_matrix": [
+    [
+      1379.4131519171663,
+      0.0,
+      637.8223484586773
+    ],
+    [
+      0.0,
+      1369.9367688931832,
+      344.3519013248128
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "distortion_coefficients": [
+    -0.046457001964562414,
+    1.0761381379969828,
+    -0.0041470943952415075,
+    -0.011495976371470717,
+    -3.965242928279385
+  ]
+}
