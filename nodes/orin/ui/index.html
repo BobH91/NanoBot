@@ -109,41 +109,76 @@ E-STOP
 // ── WebRTC setup ──
 let pc = null;
 let dc = null;
+let reconnectTimer = null;
+let connecting = false;
+
+function scheduleReconnect() {
+  if (reconnectTimer !== null || connecting) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, 3000);
+}
 
 async function connect() {
+  if (connecting) return;
+  connecting = true;
+
+  if (pc) {
+    pc.oniceconnectionstatechange = null;
+    pc.ontrack = null;
+    try { pc.close(); } catch (_) {}
+    pc = null;
+  }
+
   setStatus('conn', '🟡 Connecting…');
-  pc = new RTCPeerConnection();
 
-  pc.addTransceiver("video", { direction: "recvonly" });
+  const currentPc = new RTCPeerConnection();
+  pc = currentPc;
 
-  pc.ontrack = (event) => {
+  currentPc.addTransceiver("video", { direction: "recvonly" });
+
+  currentPc.ontrack = (event) => {
     document.getElementById("video").srcObject = event.streams[0];
   };
 
-  dc = pc.createDataChannel('control'); 
+  const currentDc = currentPc.createDataChannel('control');
+  dc = currentDc;
 
-  dc.onopen  = () => setStatus('conn', '🟢 Connected');
-  dc.onclose = () => { setStatus('conn', '🔴 Disconnected'); setTimeout(connect, 3000); };
-  dc.onmessage = e => {
+  currentDc.onopen = () => setStatus('conn', '🟢 Connected');
+
+  currentDc.onclose = () => {
+    if (pc !== currentPc) return;
+    setStatus('conn', '🔴 Disconnected');
+    scheduleReconnect();
+  };
+
+  currentDc.onmessage = e => {
     const msg = JSON.parse(e.data);
     if (msg.event === 'estop') setStatus('drive', msg.active ? 'Drive: E-STOP' : 'Drive: idle');
   };
 
-  pc.oniceconnectionstatechange = () => {
-    if (['disconnected','failed','closed'].includes(pc.iceConnectionState))
-      setTimeout(connect, 3000);
+  currentPc.oniceconnectionstatechange = () => {
+    if (pc !== currentPc) return;
+    if (['disconnected','failed','closed'].includes(currentPc.iceConnectionState)) {
+      scheduleReconnect();
+    }
   };
 
-  const offer  = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  try {
+    const offer = await currentPc.createOffer();
+    await currentPc.setLocalDescription(offer);
 
-  const resp   = await fetch('http://192.168.4.90:8080/offer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
-  });
-  const answer = await resp.json();
-  await pc.setRemoteDescription(answer);
+    const resp = await fetch('http://192.168.4.90:8080/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+    });
+    const answer = await resp.json();
+    await currentPc.setRemoteDescription(answer);
+  } finally {
+    connecting = false;
+  }
 }
 
 function send(obj) {
