@@ -13,6 +13,20 @@ While ACTIVE:
 
 Git is the source of truth for locked setpoints.
 
+## Setpoint Reproducibility Requirement
+
+When a locked setpoint depends on a hardware or software control procedure, the evidence should preserve the complete reproducibility chain where applicable:
+
+- **Requested:** the value or procedure commanded.
+- **Reported:** the value actually reported by the system after the command.
+- **Verified:** the value accepted as the locked setpoint.
+- **Runtime effect:** the observed runtime behavior associated with the verified setpoint.
+- **Reproduction procedure:** the command or procedure required to reproduce the verified state.
+
+When a driver, operating system, or device transforms, rounds, clamps, or otherwise changes a requested value, both the requested value and the resulting reported value must be preserved.
+
+A verified state and a reproducible procedure are distinct evidence claims. A setpoint may be verified as a state even when historical procedural evidence is incomplete. Missing historical procedure must not be reconstructed from memory or inference; subsequently established procedures shall be recorded as new evidence.
+
 ---
 
 ## SETPOINT-001 — Motor Direction Investigation

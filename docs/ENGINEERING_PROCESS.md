@@ -73,6 +73,18 @@ Not yet determined.
 Conclusion:
 A decision supported by evidence.
 
+### Setpoint Reproducibility
+
+When reproducibility of a setpoint matters, evidence should preserve:
+
+- requested/commanded value or procedure
+- actual reported value
+- verified locked value
+- observed runtime effect
+- reproducible command or procedure
+
+If the system transforms the requested value, preserve both the requested and reported values. Do not infer undocumented historical procedures from memory. A later verified reproduction procedure must be recorded as new evidence rather than retroactively attributed to an undocumented historical action.
+
 ---
 
 ## 6. Change Control

@@ -237,6 +237,41 @@ Applied beginning with Milestone 4.5 development hardening.
 
 ---
 
+## H-012 — Setpoint Reproducibility Evidence Gap
+
+**Category:** Process
+**Status:** OPEN
+
+**Description**
+
+A verified hardware/software setpoint was preserved as a resulting state, but the complete procedure used to establish all control values was not preserved. This creates a reproducibility gap when the working runtime state must later be reconstructed from repository evidence.
+
+**Evidence**
+
+The Orin camera control setpoint was verified and locked, including actual reported values. The historical evidence preserved the verified state and the documented exposure procedure, but did not preserve complete command-level procedures for every locked control.
+
+**Required Action**
+
+Establish and apply a repository requirement that reproducible setpoints preserve, where applicable:
+
+* Requested/commanded value or procedure
+* Actual reported value
+* Verified locked value
+* Runtime effect
+* Reproduction procedure
+
+Driver transformations must preserve both requested and reported values.
+
+Historical procedures that were not recorded must not be reconstructed from memory or inference.
+
+**Resolution Criteria**
+
+- Setpoint reproducibility requirement incorporated into the governing documents.
+- A subsequent controlled setpoint investigation demonstrates the requirement in practice.
+- Evidence is recorded and the issue is then reviewed for closure.
+
+---
+
 # Change History
 
 | Date       | Change                               | Verification                |
