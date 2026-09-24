@@ -39,6 +39,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 
 from camera import get_grabber, shutdown_grabber
+from apriltag_worker import AprilTagWorker
 from servo import get_servos, shutdown_servos
 from tcp_client import get_client, shutdown_client
 
@@ -429,14 +430,48 @@ async def status_handler(request: web.Request) -> web.Response:
     grabber = get_grabber()
     servos  = get_servos()
     client  = get_client()
+
+    apriltag_worker = request.app.get("apriltag_worker")
+    apriltag_result = (
+        apriltag_worker.latest_result()
+        if apriltag_worker is not None
+        else None
+    )
+
+    apriltag_status = {
+        "worker_alive": (
+            apriltag_worker.is_alive()
+            if apriltag_worker is not None
+            else False
+        ),
+        "result_available": apriltag_result is not None,
+    }
+
+    if apriltag_result is not None:
+        apriltag_status.update({
+            "timestamp": apriltag_result.timestamp,
+            "frame_time": apriltag_result.frame_time,
+            "detector_runtime_ms": apriltag_result.detector_runtime_ms,
+            "detected": apriltag_result.detected,
+            "tag_id": apriltag_result.tag_id,
+            "hamming": apriltag_result.hamming,
+            "decision_margin": apriltag_result.decision_margin,
+            "x_m": apriltag_result.x_m,
+            "y_m": apriltag_result.y_m,
+            "z_m": apriltag_result.z_m,
+            "distance_m": apriltag_result.distance_m,
+            "error": apriltag_result.error,
+        })
+
     return web.Response(
         content_type="application/json",
         text=json.dumps({
             "camera":    grabber.get_stats(),
-            "servo":     get_servos().get_position(),
+            "servo":     servos.get_position(),
             "rpi":       client.is_connected(),
             "estop":     estop_is_active(),
             "peers":     len(pcs),
+            "apriltag":  apriltag_status,
         }),
     )
 
@@ -444,15 +479,52 @@ async def status_handler(request: web.Request) -> web.Response:
 # ----------------------------------------------
 # Startup / shutdown
 # ----------------------------------------------
+
+async def _apriltag_loop(app: web.Application) -> None:
+    worker = app["apriltag_worker"]
+    grabber = get_grabber()
+
+    try:
+        while True:
+            frame_time = time.monotonic()
+            frame = grabber.get_frame()
+
+            if frame is not None:
+                worker.submit_frame(frame, frame_time)
+
+            await asyncio.sleep(0.1)
+    except asyncio.CancelledError:
+        raise
+
+
+
 async def on_startup(app: web.Application) -> None:
     log.info("Starting subsystems ...")
     get_grabber()   # starts camera capture thread
     get_servos()    # centres servos
+
+    app["apriltag_worker"] = AprilTagWorker()
+    app["apriltag_worker"].start()
+    app["apriltag_task"] = asyncio.create_task(
+        _apriltag_loop(app)
+    )
     get_client()    # connects to RPi TCP server
     log.info("All subsystems ready.")
 
 
 async def on_shutdown(app: web.Application) -> None:
+    apriltag_task = app.get("apriltag_task")
+    if apriltag_task is not None:
+        apriltag_task.cancel()
+        try:
+            await apriltag_task
+        except asyncio.CancelledError:
+            pass
+
+    apriltag_worker = app.get("apriltag_worker")
+    if apriltag_worker is not None:
+        apriltag_worker.stop()
+
     log.info("Shutting down ...")
     # Close all peer connections
     coros = [pc.close() for pc in pcs]
