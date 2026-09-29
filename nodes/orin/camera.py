@@ -11,6 +11,7 @@ get_frame() to get the latest JPEG bytes without blocking on capture.
 """
 
 import logging
+import subprocess
 import sys
 import threading
 import time
@@ -32,6 +33,14 @@ JPEG_QUALITY    = 85
 
 # How long to wait for first frame before raising (seconds)
 STARTUP_TIMEOUT = 5.0
+
+# Locked V4L2 camera control setpoints.
+CAMERA_GAIN = 64
+CAMERA_AUTO_EXPOSURE = 1
+CAMERA_EXPOSURE_TIME_ABSOLUTE = 115
+CAMERA_EXPOSURE_DYNAMIC_FRAMERATE = 0
+CAMERA_BACKLIGHT_COMPENSATION = 0
+V4L2_CTL = "/usr/bin/v4l2-ctl"
 
 LOG_LEVEL       = logging.INFO
 
@@ -162,6 +171,34 @@ class FrameGrabber:
         log.info("Opening %s  %dx%d  %s  %d fps …",
                  self._device, self._width, self._height,
                  self._fourcc, self._fps)
+
+        controls = (
+            f"gain={CAMERA_GAIN}",
+            f"auto_exposure={CAMERA_AUTO_EXPOSURE}",
+            f"exposure_time_absolute={CAMERA_EXPOSURE_TIME_ABSOLUTE}",
+            f"exposure_dynamic_framerate={CAMERA_EXPOSURE_DYNAMIC_FRAMERATE}",
+            f"backlight_compensation={CAMERA_BACKLIGHT_COMPENSATION}",
+        )
+
+        result = subprocess.run(
+            [
+                V4L2_CTL,
+                "-d",
+                self._device,
+                f"--set-ctrl={','.join(controls)}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(
+                f"Failed to enforce locked camera controls: {detail}"
+            )
+
+        log.info("Locked V4L2 camera controls applied")
 
         cap = cv2.VideoCapture(self._device, cv2.CAP_V4L2)
         if not cap.isOpened():
