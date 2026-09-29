@@ -80,10 +80,13 @@ def _clamp(value: float, lo: float = -1.0, hi: float = 1.0) -> float:
 
 
 def _shape(raw: float) -> float:
-    """Full shaping pipeline: deadband -> exp curve -> clamp."""
-    v = _apply_deadband(raw, DEADBAND)
-    v = _apply_exp_curve(v, EXP_CURVE)
-    return _clamp(v)
+    """Map 0-50% UI throttle linearly to 0-95% PWM after deadband."""
+    if abs(raw) < DEADBAND:
+        return 0.0
+
+    sign = 1.0 if raw > 0 else -1.0
+    normalized = (abs(raw) - DEADBAND) / (0.50 - DEADBAND)
+    return sign * _clamp(normalized * MAX_DUTY)
 
 
 # ----------------------------------------------
