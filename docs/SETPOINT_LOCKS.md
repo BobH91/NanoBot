@@ -31,7 +31,14 @@ A verified state and a reproducible procedure are distinct evidence claims. A se
 
 ## SETPOINT-001 — Motor Direction Investigation
 
-Status: ACTIVE
+Status: CLOSED (see note)
+
+Note (2026-10-04): A closure record dated 2026-08-01 exists
+(docs/evidence/2026-08-01_setpoint-001_closure_physical_verification.md).
+On 2026-10-04 MOTOR_RIGHT_INVERT was changed from False to True after a
+logged wheel test; see
+docs/evidence/2026-10-04_right-invert-wheel-direction-test.md. The cause of
+the difference from the August record is not identified.
 
 Date: 2026-07-27
 

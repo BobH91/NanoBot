@@ -9,9 +9,9 @@ Hardware:
   GPIO 27 -> DIR2 (right)  [rpi-lgpio]
 
 Differential drive notes:
-  Motors are mirror-mounted -> forward = LEFT forward + RIGHT reverse.
-  MOTOR_RIGHT_INVERT = False compensates so callers always pass
-  positive throttle = forward, positive steer = right.
+  Callers pass positive throttle = forward, positive steer = right.
+  MOTOR_LEFT_INVERT and MOTOR_RIGHT_INVERT (both True as of 2026-10-04) set the
+  physical direction signal per side; verified by test drive of all four arrows.
 
 Coordinate convention (caller's frame):
   throttle  : -1.0 ... +1.0   (+1 = forward)
@@ -201,7 +201,7 @@ class MotorDriver:
         Write direction and duty cycle to hardware.
 
         Positive value -> forward for that side.
-        MOTOR_RIGHT_INVERT flips the physical right-motor direction signal.
+        MOTOR_LEFT_INVERT / MOTOR_RIGHT_INVERT flip the physical direction signal per side.
         """
         # Physical direction: motors wired mirror-image relative to each other
         phys_left  = -left  if MOTOR_LEFT_INVERT  else left

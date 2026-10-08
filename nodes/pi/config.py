@@ -26,8 +26,8 @@ DIR_FWD = 1
 DIR_REV = 0
 
 # Differential drive — Barbie motors mounted mirrored
-MOTOR_LEFT_INVERT  = True      # corrected 2026-07-31: physical test drive showed LEFT is inverted, not RIGHT
-MOTOR_RIGHT_INVERT = False     # corrected 2026-07-30, see SETPOINT-001 evidence
+MOTOR_LEFT_INVERT  = True      # 2026-10-04 test drive: both INVERT=True gives up=both fwd, down=both rev, left=L rev/R fwd, right=L fwd/R rev
+MOTOR_RIGHT_INVERT = True      # was False until 2026-10-04; changed after logged test drive of all four arrows
 
 # Tuning
 DEADBAND     = 0.05
