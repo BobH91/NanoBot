@@ -69,6 +69,17 @@ class CameraCalibration:
 
 
 @dataclass(frozen=True)
+class TagDetection:
+    tag_id: int
+    hamming: int
+    decision_margin: float
+    x_m: float
+    y_m: float
+    z_m: float
+    distance_m: float
+
+
+@dataclass(frozen=True)
 class AprilTagResult:
     timestamp: float
     frame_time: Optional[float]
@@ -82,6 +93,23 @@ class AprilTagResult:
     z_m: Optional[float]
     distance_m: Optional[float]
     error: Optional[str] = None
+    tags: tuple = ()
+
+
+def _to_tag_detection(detection) -> TagDetection:
+    pose_t = detection.pose_t
+    x_m = float(pose_t[0][0])
+    y_m = float(pose_t[1][0])
+    z_m = float(pose_t[2][0])
+    return TagDetection(
+        tag_id=int(detection.tag_id),
+        hamming=int(detection.hamming),
+        decision_margin=float(detection.decision_margin),
+        x_m=x_m,
+        y_m=y_m,
+        z_m=z_m,
+        distance_m=(x_m * x_m + y_m * y_m + z_m * z_m) ** 0.5,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -190,6 +218,11 @@ def detect_frame(
 
         runtime_ms = (time.perf_counter() - started) * 1000.0
 
+        all_tags = tuple(
+            _to_tag_detection(detection)
+            for detection in sorted(detections, key=lambda d: int(d.tag_id))
+        )
+
         target = next(
             (
                 detection
@@ -212,6 +245,7 @@ def detect_frame(
                 y_m=None,
                 z_m=None,
                 distance_m=None,
+                tags=all_tags,
             )
 
         pose_t = target.pose_t
@@ -233,6 +267,7 @@ def detect_frame(
             y_m=y_m,
             z_m=z_m,
             distance_m=distance_m,
+            tags=all_tags,
         )
 
     except Exception as exc:

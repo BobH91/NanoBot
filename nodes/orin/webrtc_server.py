@@ -461,6 +461,18 @@ async def status_handler(request: web.Request) -> web.Response:
             "z_m": apriltag_result.z_m,
             "distance_m": apriltag_result.distance_m,
             "error": apriltag_result.error,
+            "tags": [
+                {
+                    "tag_id": t.tag_id,
+                    "hamming": t.hamming,
+                    "decision_margin": t.decision_margin,
+                    "x_m": t.x_m,
+                    "y_m": t.y_m,
+                    "z_m": t.z_m,
+                    "distance_m": t.distance_m,
+                }
+                for t in apriltag_result.tags
+            ],
         })
 
     return web.Response(
