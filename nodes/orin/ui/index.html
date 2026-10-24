@@ -212,15 +212,8 @@ function setStatus(key, text) {
   if (el) el.textContent = text;
 }
 
-// ── Drive command map ──
+// ── Speed slider value (0-1) ──
 const speed = () => parseInt(document.getElementById('speed-slider').value) / 100;
-
-const DRIVE_CMDS = {
-  fwd:   () => ({ cmd:'drive', throttle:  speed(), steering:  0.0 }),
-  back:  () => ({ cmd:'drive', throttle: -speed(), steering:  0.0 }),
-  left:  () => ({ cmd:'drive', throttle:  speed() * 0.3, steering: -speed() }),
-  right: () => ({ cmd:'drive', throttle:  speed() * 0.3, steering:  speed() }),
-};
 
 // ── Speed readout ──
 const speedSlider = document.getElementById('speed-slider');
@@ -229,54 +222,13 @@ speedSlider.addEventListener('input', () => {
   speedReadout.textContent = speedSlider.value + '%';
 });
 
-// ── Drive D-pad ──
-// ── Drive D-pad ──
-let driveTimer = null;
-
-document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn => {
-  const cmd = btn.dataset.cmd;
-
-  const sendDrive = () => {
-    const payload = DRIVE_CMDS[cmd] ? DRIVE_CMDS[cmd]() : null;
-    if (payload) {
-      send(payload);
-      setStatus('drive', 'Drive: ' + cmd);
-    }
-  };
-
-  const press = e => {
-    e.preventDefault();
-    btn.classList.add('pressed');
-
-    sendDrive();
-
-    if (driveTimer) clearInterval(driveTimer);
-    driveTimer = setInterval(sendDrive, 100);
-  };
-
-  const release = e => {
-    e.preventDefault();
-    btn.classList.remove('pressed');
-
-    if (driveTimer) {
-      clearInterval(driveTimer);
-      driveTimer = null;
-    }
-
-    send({ cmd: 'stop' });
-    setStatus('drive', 'Drive: idle');
-  };
-
-  btn.addEventListener('pointerdown', press);
-  btn.addEventListener('pointerup', release);
-  btn.addEventListener('pointerleave', release);
-});
-
 // -- Joysticks (shared makeStick) --
 const JOY_DEADZONE  = 0.10;   // fraction of knob travel
 const JOY_SEND_MS   = 100;    // send interval while a stick is held
 const JOY_MAX_INPUT = 0.50;   // drive.py _shape() saturates at 0.50
 const CAM_MAX_DEG_S = 22;     // camera speed at full deflection; keep <= SLEW_RATE_DEG_S (120) in servo.py
+const CAM_CURVE     = 2.0;    // 1 = linear; higher = finer control near center (full deflection speed unchanged)
+const camCurve = v => Math.sign(v) * Math.pow(Math.abs(v), CAM_CURVE);
 
 function makeStick(base, onTick, onRelease) {
   const knob = base.firstElementChild;
@@ -340,36 +292,14 @@ makeStick(document.getElementById('joy-base'),
 makeStick(document.getElementById('cam-base'),
   (x, y) => {
     const step = CAM_MAX_DEG_S * JOY_SEND_MS / 1000;
-    if (x !== 0) send({ cmd: 'nudge_pan',  value: x * step });
-    if (y !== 0) send({ cmd: 'nudge_tilt', value: y * step });
-    setStatus('pt', `PT: pan ${(x * step).toFixed(1)} tilt ${(y * step).toFixed(1)}`);
+    const px = camCurve(x) * step, py = camCurve(y) * step;
+    if (px !== 0) send({ cmd: 'nudge_pan',  value: px });
+    if (py !== 0) send({ cmd: 'nudge_tilt', value: py });
+    setStatus('pt', `PT: pan ${px.toFixed(1)} tilt ${py.toFixed(1)}`);
   },
   () => {
     setStatus('pt', 'PT: idle');
   });
-
-// ── Pan-tilt D-pad ──
-const PT_CMDS = {
-  pt_up:    { cmd:'nudge_tilt', value:  5 },
-  pt_down:  { cmd:'nudge_tilt', value: -5 },
-  pt_left:  { cmd:'nudge_pan',  value: -5 },
-  pt_right: { cmd:'nudge_pan',  value:  5 },
-};
-
-document.getElementById('pantilt-pad').querySelectorAll('.dpad-btn[data-cmd]').forEach(btn => {
-  const cmd = btn.dataset.cmd;
-  const press = e => {
-    e.preventDefault(); btn.classList.add('pressed');
-    if (PT_CMDS[cmd]) { send(PT_CMDS[cmd]); setStatus('pt', 'PT: ' + cmd); }
-  };
-  const release = e => {
-    e.preventDefault(); btn.classList.remove('pressed');
-    setStatus('pt', 'PT: idle');
-  };
-  btn.addEventListener('pointerdown',  press);
-  btn.addEventListener('pointerup',    release);
-  btn.addEventListener('pointerleave', release);
-});
 
 // ── E-STOP ──
 document.getElementById('estop').addEventListener('pointerdown', e => {
