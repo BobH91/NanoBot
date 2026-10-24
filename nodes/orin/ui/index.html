@@ -56,6 +56,16 @@ button {
     background: #4a8;
     pointer-events: none;
 }
+
+#controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 40px;
+}
+#pantilt-pad { order: 1; }
+#drive-pad   { order: 2; }
 </style>
 
 </head>
@@ -89,19 +99,12 @@ value="50">
 </div>
 
 
+<div id="controls-row">
 <div class="panel" id="drive-pad">
 
 <h2>Drive</h2>
 
-<div>
-<button class="dpad-btn" data-cmd="fwd">▲</button>
-</div>
 
-<div>
-<button class="dpad-btn" data-cmd="left">◀</button>
-<button class="dpad-btn" data-cmd="back">▼</button>
-<button class="dpad-btn" data-cmd="right">▶</button>
-</div>
 
 
 <div id="joy-base"><div id="joy-knob"></div></div>
@@ -122,6 +125,7 @@ value="50">
 <button class="dpad-btn" data-cmd="pt_right">▶</button>
 </div>
 
+</div>
 </div>
 
 
