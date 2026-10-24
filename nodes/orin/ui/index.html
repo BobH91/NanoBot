@@ -34,7 +34,7 @@ button {
     margin: 10px;
 }
 
-#joy-base {
+#joy-base, #cam-base {
     position: relative;
     box-sizing: border-box;
     width: 160px;
@@ -45,7 +45,7 @@ button {
     border: 2px solid #555;
     touch-action: none;
 }
-#joy-knob {
+#joy-knob, #cam-knob {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -115,15 +115,7 @@ value="50">
 
 <h2>Camera</h2>
 
-<div>
-<button class="dpad-btn" data-cmd="pt_up">▲</button>
-</div>
-
-<div>
-<button class="dpad-btn" data-cmd="pt_left">◀</button>
-<button class="dpad-btn" data-cmd="pt_down">▼</button>
-<button class="dpad-btn" data-cmd="pt_right">▶</button>
-</div>
+<div id="cam-base"><div id="cam-knob"></div></div>
 
 </div>
 </div>
@@ -280,63 +272,81 @@ document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn =
   btn.addEventListener('pointerleave', release);
 });
 
-// ── Joystick ──
+// -- Joysticks (shared makeStick) --
 const JOY_DEADZONE  = 0.10;   // fraction of knob travel
-const JOY_SEND_MS   = 100;    // same rate as the D-pad
+const JOY_SEND_MS   = 100;    // send interval while a stick is held
 const JOY_MAX_INPUT = 0.50;   // drive.py _shape() saturates at 0.50
+const CAM_MAX_DEG_S = 60;     // camera speed at full deflection; keep <= SLEW_RATE_DEG_S (120) in servo.py
 
-const joyBase = document.getElementById('joy-base');
-const joyKnob = document.getElementById('joy-knob');
-let joyPointer = null, joyX = 0, joyY = 0, joyTimer = null;
+function makeStick(base, onTick, onRelease) {
+  const knob = base.firstElementChild;
+  let pointer = null, x = 0, y = 0, timer = null;
 
-function joyMove(e) {
-  const rect = joyBase.getBoundingClientRect();
-  const travel = (rect.width - joyKnob.offsetWidth) / 2;
-  let dx = (e.clientX - (rect.left + rect.width / 2)) / travel;
-  let dy = (e.clientY - (rect.top + rect.height / 2)) / travel;
-  let mag = Math.hypot(dx, dy);
-  if (mag > 1) { dx /= mag; dy /= mag; mag = 1; }
-  joyKnob.style.transform = `translate(${dx * travel}px, ${dy * travel}px)`;
-  if (mag < JOY_DEADZONE) {
-    joyX = 0; joyY = 0;
-  } else {
-    const k = (mag - JOY_DEADZONE) / (1 - JOY_DEADZONE) / mag;
-    joyX = dx * k;
-    joyY = -dy * k;            // screen Y is down-positive
+  function move(e) {
+    const rect = base.getBoundingClientRect();
+    const travel = (rect.width - knob.offsetWidth) / 2;
+    let dx = (e.clientX - (rect.left + rect.width / 2)) / travel;
+    let dy = (e.clientY - (rect.top + rect.height / 2)) / travel;
+    let mag = Math.hypot(dx, dy);
+    if (mag > 1) { dx /= mag; dy /= mag; mag = 1; }
+    knob.style.transform = `translate(${dx * travel}px, ${dy * travel}px)`;
+    if (mag < JOY_DEADZONE) {
+      x = 0; y = 0;
+    } else {
+      const k = (mag - JOY_DEADZONE) / (1 - JOY_DEADZONE) / mag;
+      x = dx * k;
+      y = -dy * k;            // screen Y is down-positive
+    }
   }
+
+  function end(e) {
+    if (e.pointerId !== pointer) return;
+    pointer = null; x = 0; y = 0;
+    knob.style.transform = '';
+    if (timer) { clearInterval(timer); timer = null; }
+    onRelease();
+  }
+
+  base.addEventListener('pointerdown', e => {
+    if (pointer !== null) return;
+    e.preventDefault();
+    pointer = e.pointerId;
+    base.setPointerCapture(e.pointerId);
+    move(e);
+    onTick(x, y);
+    timer = setInterval(() => onTick(x, y), JOY_SEND_MS);
+  });
+  base.addEventListener('pointermove', e => {
+    if (e.pointerId === pointer) move(e);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t =>
+    base.addEventListener(t, end));
 }
 
-function joySend() {
-  const limit = Math.min(speed(), JOY_MAX_INPUT);
-  const p = { cmd: 'drive', throttle: joyY * limit, steering: joyX * limit };
-  send(p);
-  setStatus('drive', `Drive: joy t=${p.throttle.toFixed(2)} s=${p.steering.toFixed(2)}`);
-}
+// Drive stick: throttle/steering scaled by the speed slider, capped at JOY_MAX_INPUT
+makeStick(document.getElementById('joy-base'),
+  (x, y) => {
+    const limit = Math.min(speed(), JOY_MAX_INPUT);
+    const p = { cmd: 'drive', throttle: y * limit, steering: x * limit };
+    send(p);
+    setStatus('drive', `Drive: joy t=${p.throttle.toFixed(2)} s=${p.steering.toFixed(2)}`);
+  },
+  () => {
+    send({ cmd: 'stop' });
+    setStatus('drive', 'Drive: idle');
+  });
 
-joyBase.addEventListener('pointerdown', e => {
-  if (joyPointer !== null) return;
-  e.preventDefault();
-  joyPointer = e.pointerId;
-  joyBase.setPointerCapture(e.pointerId);
-  joyMove(e);
-  joySend();
-  joyTimer = setInterval(joySend, JOY_SEND_MS);
-});
-
-joyBase.addEventListener('pointermove', e => {
-  if (e.pointerId === joyPointer) joyMove(e);
-});
-
-function joyEnd(e) {
-  if (e.pointerId !== joyPointer) return;
-  joyPointer = null; joyX = 0; joyY = 0;
-  joyKnob.style.transform = '';
-  if (joyTimer) { clearInterval(joyTimer); joyTimer = null; }
-  send({ cmd: 'stop' });
-  setStatus('drive', 'Drive: idle');
-}
-['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t =>
-  joyBase.addEventListener(t, joyEnd));
+// Camera stick: rate control. Repeated nudges while held; the camera stays put on release.
+makeStick(document.getElementById('cam-base'),
+  (x, y) => {
+    const step = CAM_MAX_DEG_S * JOY_SEND_MS / 1000;
+    if (x !== 0) send({ cmd: 'nudge_pan',  value: x * step });
+    if (y !== 0) send({ cmd: 'nudge_tilt', value: y * step });
+    setStatus('pt', `PT: pan ${(x * step).toFixed(1)} tilt ${(y * step).toFixed(1)}`);
+  },
+  () => {
+    setStatus('pt', 'PT: idle');
+  });
 
 // ── Pan-tilt D-pad ──
 const PT_CMDS = {
