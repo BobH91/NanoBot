@@ -33,6 +33,29 @@ button {
 .status {
     margin: 10px;
 }
+
+#joy-base {
+    position: relative;
+    box-sizing: border-box;
+    width: 160px;
+    height: 160px;
+    margin: 15px auto;
+    border-radius: 50%;
+    background: #222;
+    border: 2px solid #555;
+    touch-action: none;
+}
+#joy-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 60px;
+    height: 60px;
+    margin: -30px 0 0 -30px;
+    border-radius: 50%;
+    background: #4a8;
+    pointer-events: none;
+}
 </style>
 
 </head>
@@ -80,6 +103,8 @@ value="50">
 <button class="dpad-btn" data-cmd="right">▶</button>
 </div>
 
+
+<div id="joy-base"><div id="joy-knob"></div></div>
 </div>
 
 
@@ -250,6 +275,64 @@ document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn =
   btn.addEventListener('pointerup', release);
   btn.addEventListener('pointerleave', release);
 });
+
+// ── Joystick ──
+const JOY_DEADZONE  = 0.10;   // fraction of knob travel
+const JOY_SEND_MS   = 100;    // same rate as the D-pad
+const JOY_MAX_INPUT = 0.50;   // drive.py _shape() saturates at 0.50
+
+const joyBase = document.getElementById('joy-base');
+const joyKnob = document.getElementById('joy-knob');
+let joyPointer = null, joyX = 0, joyY = 0, joyTimer = null;
+
+function joyMove(e) {
+  const rect = joyBase.getBoundingClientRect();
+  const travel = (rect.width - joyKnob.offsetWidth) / 2;
+  let dx = (e.clientX - (rect.left + rect.width / 2)) / travel;
+  let dy = (e.clientY - (rect.top + rect.height / 2)) / travel;
+  let mag = Math.hypot(dx, dy);
+  if (mag > 1) { dx /= mag; dy /= mag; mag = 1; }
+  joyKnob.style.transform = `translate(${dx * travel}px, ${dy * travel}px)`;
+  if (mag < JOY_DEADZONE) {
+    joyX = 0; joyY = 0;
+  } else {
+    const k = (mag - JOY_DEADZONE) / (1 - JOY_DEADZONE) / mag;
+    joyX = dx * k;
+    joyY = -dy * k;            // screen Y is down-positive
+  }
+}
+
+function joySend() {
+  const limit = Math.min(speed(), JOY_MAX_INPUT);
+  const p = { cmd: 'drive', throttle: joyY * limit, steering: joyX * limit };
+  send(p);
+  setStatus('drive', `Drive: joy t=${p.throttle.toFixed(2)} s=${p.steering.toFixed(2)}`);
+}
+
+joyBase.addEventListener('pointerdown', e => {
+  if (joyPointer !== null) return;
+  e.preventDefault();
+  joyPointer = e.pointerId;
+  joyBase.setPointerCapture(e.pointerId);
+  joyMove(e);
+  joySend();
+  joyTimer = setInterval(joySend, JOY_SEND_MS);
+});
+
+joyBase.addEventListener('pointermove', e => {
+  if (e.pointerId === joyPointer) joyMove(e);
+});
+
+function joyEnd(e) {
+  if (e.pointerId !== joyPointer) return;
+  joyPointer = null; joyX = 0; joyY = 0;
+  joyKnob.style.transform = '';
+  if (joyTimer) { clearInterval(joyTimer); joyTimer = null; }
+  send({ cmd: 'stop' });
+  setStatus('drive', 'Drive: idle');
+}
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t =>
+  joyBase.addEventListener(t, joyEnd));
 
 // ── Pan-tilt D-pad ──
 const PT_CMDS = {
