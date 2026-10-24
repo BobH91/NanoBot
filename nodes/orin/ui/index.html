@@ -228,6 +228,7 @@ const JOY_SEND_MS   = 100;    // send interval while a stick is held
 const JOY_MAX_INPUT = 0.50;   // drive.py _shape() saturates at 0.50
 const CAM_MAX_DEG_S = 22;     // camera speed at full deflection; keep <= SLEW_RATE_DEG_S (120) in servo.py
 const CAM_CURVE     = 2.0;    // 1 = linear; higher = finer control near center (full deflection speed unchanged)
+const CAM_PAN_SIGN  = -1;     // -1 = stick right pans camera right (pan servo is mirrored); set to 1 to reverse
 const camCurve = v => Math.sign(v) * Math.pow(Math.abs(v), CAM_CURVE);
 
 function makeStick(base, onTick, onRelease) {
@@ -292,7 +293,7 @@ makeStick(document.getElementById('joy-base'),
 makeStick(document.getElementById('cam-base'),
   (x, y) => {
     const step = CAM_MAX_DEG_S * JOY_SEND_MS / 1000;
-    const px = camCurve(x) * step, py = camCurve(y) * step;
+    const px = CAM_PAN_SIGN * camCurve(x) * step, py = camCurve(y) * step;
     if (px !== 0) send({ cmd: 'nudge_pan',  value: px });
     if (py !== 0) send({ cmd: 'nudge_tilt', value: py });
     setStatus('pt', `PT: pan ${px.toFixed(1)} tilt ${py.toFixed(1)}`);
