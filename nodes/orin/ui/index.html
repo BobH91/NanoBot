@@ -276,7 +276,7 @@ document.getElementById('drive-pad').querySelectorAll('.dpad-btn').forEach(btn =
 const JOY_DEADZONE  = 0.10;   // fraction of knob travel
 const JOY_SEND_MS   = 100;    // send interval while a stick is held
 const JOY_MAX_INPUT = 0.50;   // drive.py _shape() saturates at 0.50
-const CAM_MAX_DEG_S = 60;     // camera speed at full deflection; keep <= SLEW_RATE_DEG_S (120) in servo.py
+const CAM_MAX_DEG_S = 30;     // camera speed at full deflection; keep <= SLEW_RATE_DEG_S (120) in servo.py
 
 function makeStick(base, onTick, onRelease) {
   const knob = base.firstElementChild;
