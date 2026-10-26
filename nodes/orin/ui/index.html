@@ -66,6 +66,11 @@ button {
 }
 #pantilt-pad { order: 1; }
 #drive-pad   { order: 2; }
+#tag-readout {
+    font-family: monospace;
+    font-size: 14px;
+    margin: 10px;
+}
 </style>
 
 </head>
@@ -82,6 +87,11 @@ button {
 
 
 <video id="video" autoplay playsinline></video>
+
+<div class="panel" id="tag-panel">
+<h2>AprilTags</h2>
+<div id="tag-readout">Waiting for status...</div>
+</div>
 
 
 <div class="panel">
@@ -211,6 +221,44 @@ function setStatus(key, text) {
   const el = document.getElementById(map[key]);
   if (el) el.textContent = text;
 }
+
+// -- AprilTag readout (read-only, polls /status) --
+const TAG_POLL_MS = 250;
+const tagReadout = document.getElementById('tag-readout');
+const fmt = (v, d) => (typeof v === 'number' ? v.toFixed(d) : '--');
+
+function showTagLines(lines) {
+  tagReadout.textContent = '';
+  for (const t of lines) {
+    const row = document.createElement('div');
+    row.textContent = t;
+    tagReadout.appendChild(row);
+  }
+}
+
+async function pollTags() {
+  try {
+    const resp = await fetch('/status', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const a = (await resp.json()).apriltag;
+    if (!a || !a.worker_alive) {
+      showTagLines(['AprilTag worker not running']);
+    } else if (a.error) {
+      showTagLines(['AprilTag error: ' + a.error]);
+    } else if (!a.detected || !a.tags || a.tags.length === 0) {
+      showTagLines(['No tag in view']);
+    } else {
+      showTagLines(a.tags.map(t =>
+        `ID ${t.tag_id} | dist ${fmt(t.distance_m, 2)} m | ` +
+        `x ${fmt(t.x_m, 2)} y ${fmt(t.y_m, 2)} z ${fmt(t.z_m, 2)} | ` +
+        `margin ${fmt(t.decision_margin, 1)} | ham ${t.hamming}`));
+    }
+  } catch (e) {
+    showTagLines(['AprilTag status unavailable (' + e.message + ')']);
+  }
+  setTimeout(pollTags, TAG_POLL_MS);
+}
+pollTags();
 
 // ── Speed slider value (0-1) ──
 const speed = () => parseInt(document.getElementById('speed-slider').value) / 100;
