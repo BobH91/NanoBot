@@ -33,7 +33,7 @@ import time
 import threading
 from typing import Set
 
-from aiohttp import web
+from aiohttp import ClientError, ClientSession, ClientTimeout, web
 from av import VideoFrame
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
@@ -48,6 +48,8 @@ from tcp_client import get_client, shutdown_client
 # ----------------------------------------------
 HTTP_HOST       = "0.0.0.0"
 HTTP_PORT       = 8080
+IMU_PI_URL      = "http://192.168.4.153:9001/imu"
+IMU_TIMEOUT_S   = 2.0
 VIDEO_CLOCKRATE = 90000
 VIDEO_FPS       = 30
 LOG_LEVEL       = logging.INFO
@@ -425,6 +427,47 @@ async def snapshot_handler(request: web.Request) -> web.Response:
     )
 
 
+async def imu_handler(request: web.Request) -> web.Response:
+    """Proxy the Pi IMU report to browsers through the Orin same-origin API."""
+    session = request.app.get("imu_session")
+    if session is None or session.closed:
+        return web.json_response(
+            {
+                "healthy": False,
+                "reason": "proxy_unavailable",
+                "yaw": None,
+                "pitch": None,
+                "roll": None,
+                "age_ms": None,
+            },
+            status=503,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    try:
+        async with session.get(IMU_PI_URL) as response:
+            payload = await response.json(content_type=None)
+            return web.json_response(
+                payload,
+                status=response.status,
+                headers={"Cache-Control": "no-store"},
+            )
+    except (ClientError, asyncio.TimeoutError, ValueError) as exc:
+        log.warning("IMU Pi request failed: %s", exc)
+        return web.json_response(
+            {
+                "healthy": False,
+                "reason": "pi_unreachable",
+                "yaw": None,
+                "pitch": None,
+                "roll": None,
+                "age_ms": None,
+            },
+            status=503,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
 async def status_handler(request: web.Request) -> web.Response:
     """Simple HTTP status endpoint for health checks."""
     grabber = get_grabber()
@@ -511,6 +554,9 @@ async def _apriltag_loop(app: web.Application) -> None:
 
 
 async def on_startup(app: web.Application) -> None:
+    app["imu_session"] = ClientSession(
+        timeout=ClientTimeout(total=IMU_TIMEOUT_S)
+    )
     log.info("Starting subsystems ...")
     get_grabber()   # starts camera capture thread
     get_servos()    # centres servos
@@ -525,6 +571,9 @@ async def on_startup(app: web.Application) -> None:
 
 
 async def on_shutdown(app: web.Application) -> None:
+    imu_session = app.get("imu_session")
+    if imu_session is not None and not imu_session.closed:
+        await imu_session.close()
     apriltag_task = app.get("apriltag_task")
     if apriltag_task is not None:
         apriltag_task.cancel()
@@ -559,6 +608,7 @@ def main() -> None:
 
     app.router.add_post("/offer",  offer_handler)
     app.router.add_get("/status",  status_handler)
+    app.router.add_get("/imu",     imu_handler)
     app.router.add_get("/snapshot", snapshot_handler)
     app.router.add_get("/stream",  stream_handler)
     app.router.add_static("/ui/",  UI_DIR)

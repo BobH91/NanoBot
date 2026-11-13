@@ -93,6 +93,11 @@ button {
 <div id="tag-readout">Waiting for status...</div>
 </div>
 
+<div class="panel" id="imu-panel">
+<h2>IMU</h2>
+<div id="imu-readout">Waiting for IMU...</div>
+</div>
+
 
 <div class="panel">
 
@@ -259,6 +264,58 @@ async function pollTags() {
   setTimeout(pollTags, TAG_POLL_MS);
 }
 pollTags();
+
+// -- IMU readout (read-only, same-origin Orin proxy) --
+const IMU_URL = '/imu';
+const IMU_POLL_MS = 500;
+const imuReadout = document.getElementById('imu-readout');
+
+function showImuLines(lines) {
+  imuReadout.textContent = '';
+  for (const line of lines) {
+    const row = document.createElement('div');
+    row.textContent = line;
+    imuReadout.appendChild(row);
+  }
+}
+
+async function pollImu() {
+  try {
+    const resp = await fetch(IMU_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    const imu = await resp.json();
+    const state = imu.healthy ? 'HEALTHY' :
+      (imu.reason === 'stale_data' ? 'STALE' : 'UNAVAILABLE');
+
+    const lines = [`IMU: ${state}`];
+
+    if (typeof imu.yaw === 'number' &&
+        typeof imu.pitch === 'number' &&
+        typeof imu.roll === 'number') {
+      lines.push(
+        `Yaw: ${fmt(imu.yaw, 2)}° | Pitch: ${fmt(imu.pitch, 2)}° | ` +
+        `Roll: ${fmt(imu.roll, 2)}°`
+      );
+    } else {
+      lines.push('Yaw: -- | Pitch: -- | Roll: --');
+    }
+
+    lines.push(
+      `Age: ${typeof imu.age_ms === 'number' ? fmt(imu.age_ms, 1) + ' ms' : '--'}`
+    );
+    showImuLines(lines);
+  } catch (e) {
+    showImuLines([
+      'IMU: UNAVAILABLE',
+      'Yaw: -- | Pitch: -- | Roll: --',
+      'Connection: ' + e.message
+    ]);
+  }
+
+  setTimeout(pollImu, IMU_POLL_MS);
+}
+pollImu();
 
 // ── Speed slider value (0-1) ──
 const speed = () => parseInt(document.getElementById('speed-slider').value) / 100;
