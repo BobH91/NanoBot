@@ -48,3 +48,18 @@ TILT_STEP_DEG =   5
 # WebRTC DataChannel names
 DC_CONTROL    = "control"       # browser → Nano: JSON commands
 DC_TELEMETRY  = "telemetry"     # Nano → browser: JSON status
+
+# -----------------------------------------------------------------------------
+# AprilTag scan-and-map (NanoBot stationary; grid origin = pan axis)
+# -----------------------------------------------------------------------------
+SCAN_PAN_MIN_DEG      = -90
+SCAN_PAN_MAX_DEG      =  90
+SCAN_PAN_STEP_DEG     =  20               # FOV 49.8 deg -> ~30 deg overlap
+SCAN_TILT_ROWS_DEG    = (-30, -15, 0, 15, 30)   # FOV 29.4 deg -> ~14 deg overlap
+SCAN_ARRIVE_TOL_DEG   = 0.5               # servo.get_position() within this of target
+SCAN_SETTLE_S         = 0.40              # extra dwell after arrival (no servo feedback)
+SCAN_FRESH_MARGIN_S   = 0.25              # accept results with frame_time > settle_done + this
+SCAN_RESULT_TIMEOUT_S = 2.0               # give up on a stop if no fresh result
+SCAN_PAN_SIGN         = -1                # -1 = servo pan positive turns camera LEFT (tag test Oct 28)
+SCAN_TILT_SIGN        = 1                 # +1 = servo tilt positive looks UP (tag test Oct 28)
+SCAN_ARRIVE_TIMEOUT_S = 5.0               # abort if servos do not reach a stop within this

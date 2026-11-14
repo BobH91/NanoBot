@@ -163,7 +163,7 @@ class MotorDriver:
             self._target_right = 0.0
             self._cur_left     = 0.0
             self._cur_right    = 0.0
-        self._apply(0.0, 0.0)
+            self._apply(0.0, 0.0)
 
     def close(self) -> None:
         """Release hardware resources."""
@@ -183,7 +183,7 @@ class MotorDriver:
                 self._cur_left  = self._step(self._cur_left,  self._target_left,  max_step)
                 self._cur_right = self._step(self._cur_right, self._target_right, max_step)
                 cl, cr = self._cur_left, self._cur_right
-            self._apply(cl, cr)
+                self._apply(cl, cr)
 
     @staticmethod
     def _step(current: float, target: float, max_step: float) -> float:

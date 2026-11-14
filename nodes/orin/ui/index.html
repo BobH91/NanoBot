@@ -191,7 +191,17 @@ async function connect() {
 
   currentDc.onmessage = e => {
     const msg = JSON.parse(e.data);
-    if (msg.event === 'estop') setStatus('drive', msg.active ? 'Drive: E-STOP' : 'Drive: idle');
+    if (msg.event === 'estop') {
+      if (!msg.active) {
+        setStatus('drive', 'Drive: idle');
+      } else if (msg.pi_acknowledged === false) {
+        setStatus('drive', 'E-STOP ACTIVE — PI ACK FAILED');
+      } else if (msg.pi_acknowledged === true) {
+        setStatus('drive', 'E-STOP ACTIVE — PI ACK');
+      } else {
+        setStatus('drive', 'Drive: E-STOP');
+      }
+    }
   };
 
   currentPc.oniceconnectionstatechange = () => {
@@ -411,7 +421,7 @@ makeStick(document.getElementById('cam-base'),
 document.getElementById('estop').addEventListener('pointerdown', e => {
   e.preventDefault();
   send({ cmd: 'estop' });
-  setStatus('drive', 'Drive: E-STOP');
+  setStatus('drive', 'E-STOP — awaiting Pi acknowledgement');
 });
 document.getElementById('estop').addEventListener('pointerup', e => {
   document.getElementById('estop').classList.remove('pressed');

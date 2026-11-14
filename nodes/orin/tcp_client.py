@@ -146,9 +146,9 @@ class DriveClient:
         self._connected = False
 
     def _send(self, obj: dict) -> bool:
-        """Fire-and-forget send; reads and discards the response."""
-        self._send_recv(obj)
-        return self._connected
+        """Return True only when the Pi acknowledges the command."""
+        resp = self._send_recv(obj)
+        return resp is not None and resp.get("status") == "ok"
 
     def _send_recv(self, obj: dict) -> dict | None:
         """Send a command and return the parsed response, or None on error."""

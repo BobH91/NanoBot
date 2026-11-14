@@ -41,6 +41,7 @@ from aiortc.contrib.media import MediaRelay
 from camera import get_grabber, shutdown_grabber
 from apriltag_worker import AprilTagWorker
 from servo import get_servos, shutdown_servos
+from scan_map import ScanRunner
 from tcp_client import get_client, shutdown_client
 
 # ----------------------------------------------
@@ -76,22 +77,64 @@ log = logging.getLogger("webrtc_server")
 # ----------------------------------------------
 _estop_active = False
 _estop_lock   = threading.Lock()
+_motion_lock  = threading.RLock()
+
+# Scan runner (created in on_startup); handle_command checks it for lockout
+_scan_runner = None
 
 
-def estop_trigger() -> None:
+def _set_scan_runner(runner) -> None:
+    global _scan_runner
+    _scan_runner = runner
+
+
+def estop_trigger() -> bool:
     global _estop_active
-    with _estop_lock:
-        _estop_active = True
-    get_client().estop()
-    log.warning("E-STOP LATCHED")
+    # Latch locally, then attempt the Pi hardware stop before auxiliary work.
+    with _motion_lock:
+        with _estop_lock:
+            _estop_active = True
+
+        try:
+            pi_acknowledged = bool(get_client().estop())
+        except Exception:
+            pi_acknowledged = False
+            log.exception("Pi E-stop command failed")
+
+        if _scan_runner is not None:
+            try:
+                _scan_runner.estop()
+            except Exception:
+                log.exception("Failed to abort scan after E-stop")
+
+        try:
+            get_servos().hold()
+        except Exception:
+            log.exception("Failed to hold servos after E-stop")
+
+    if pi_acknowledged:
+        log.warning("E-STOP LATCHED; Pi acknowledged hardware stop")
+    else:
+        log.critical(
+            "E-STOP LATCHED LOCALLY, BUT PI DID NOT ACKNOWLEDGE "
+            "THE HARDWARE STOP"
+        )
+    return pi_acknowledged
 
 
-def estop_reset() -> None:
+def estop_reset() -> bool:
     global _estop_active
-    with _estop_lock:
-        _estop_active = False
-    get_client().stop()
-    log.info("E-STOP reset")
+    # Keep the local latch active unless the Pi acknowledges the stop.
+    with _motion_lock:
+        pi_acknowledged = get_client().stop()
+        if not pi_acknowledged:
+            log.critical("E-STOP RESET REFUSED: Pi did not acknowledge stop")
+            return False
+        with _estop_lock:
+            _estop_active = False
+
+    log.info("E-STOP reset; Pi acknowledged stop")
+    return True
 
 
 def estop_is_active() -> bool:
@@ -138,63 +181,77 @@ class CameraTrack(VideoStreamTrack):
 # DataChannel command handler
 # ----------------------------------------------
 def handle_command(raw: str, channel) -> None:
-    log.info("COMMAND RECEIVED: %s", raw)
     """Parse and dispatch a DataChannel message from the browser."""
+    log.info("COMMAND RECEIVED: %s", raw)
     try:
         obj = json.loads(raw)
-        log.info("BROWSER COMMAND: %s", obj)
     except json.JSONDecodeError:
         log.warning("Bad JSON on DataChannel: %r", raw)
         return
-    log.info("BROWSER COMMAND: %s", obj)
+
     cmd = obj.get("cmd", "").lower()
 
-    # E-STOP blocks all motion commands
-    if estop_is_active() and cmd not in ("estop_reset", "ping"):
+    if cmd == "estop":
+        pi_acknowledged = estop_trigger()
+        _send(channel, {
+            "event": "estop",
+            "active": True,
+            "pi_acknowledged": pi_acknowledged,
+        })
         return
 
-    client  = get_client()
-    servos  = get_servos()
+    if cmd == "estop_reset":
+        reset_ok = estop_reset()
+        _send(channel, {
+            "event": "estop",
+            "active": not reset_ok,
+            "pi_acknowledged": reset_ok,
+        })
+        return
 
-    if cmd == "drive":
-        throttle = float(obj.get("throttle", 0.0))
-        steering = float(obj.get("steering", 0.0))
-        client.drive(throttle=throttle, steering=steering)
-
-    elif cmd == "pan":
-        servos.set_pan(float(obj.get("value", 0.0)))
-
-    elif cmd == "tilt":
-        servos.set_tilt(float(obj.get("value", 0.0)))
-
-    elif cmd == "servo":
-        servos.set(
-            pan=float(obj.get("pan", 0.0)),
-            tilt=float(obj.get("tilt", 0.0)),
-        )
-
-    elif cmd == "nudge_pan":
-        servos.nudge_pan(float(obj.get("value", 0.0)))
-
-    elif cmd == "nudge_tilt":
-        servos.nudge_tilt(float(obj.get("value", 0.0)))
-
-    elif cmd == "estop":
-        estop_trigger()
-        _send(channel, {"event": "estop", "active": True})
-
-    elif cmd == "estop_reset":
-        estop_reset()
-        _send(channel, {"event": "estop", "active": False})
-
-    elif cmd == "ping":
+    if cmd == "ping":
         _send(channel, {"event": "pong"})
+        return
 
-    elif cmd == "stop":
-        client.stop()
+    if cmd == "stop":
+        get_client().stop()
+        return
 
-    else:
+    motion_commands = (
+        "drive", "pan", "tilt", "servo", "nudge_pan", "nudge_tilt",
+    )
+    if cmd not in motion_commands:
         log.warning("Unknown DataChannel cmd: %r", cmd)
+        return
+
+    # E-stop and motion dispatch share this lock. A command cannot
+    # pass the latch check and execute after E-stop has been asserted.
+    with _motion_lock:
+        if estop_is_active():
+            return
+
+        if _scan_runner is not None and _scan_runner.is_running():
+            return
+
+        client = get_client()
+        if cmd == "drive":
+            client.drive(
+                throttle=float(obj.get("throttle", 0.0)),
+                steering=float(obj.get("steering", 0.0)),
+            )
+        elif cmd == "pan":
+            get_servos().set_pan(float(obj.get("value", 0.0)))
+        elif cmd == "tilt":
+            get_servos().set_tilt(float(obj.get("value", 0.0)))
+        elif cmd == "servo":
+            get_servos().set(
+                pan=float(obj.get("pan", 0.0)),
+                tilt=float(obj.get("tilt", 0.0)),
+            )
+        elif cmd == "nudge_pan":
+            get_servos().nudge_pan(float(obj.get("value", 0.0)))
+        elif cmd == "nudge_tilt":
+            get_servos().nudge_tilt(float(obj.get("value", 0.0)))
 
 
 def _send(channel, obj: dict) -> None:
@@ -535,14 +592,44 @@ async def status_handler(request: web.Request) -> web.Response:
 # Startup / shutdown
 # ----------------------------------------------
 
+# ----------------------------------------------
+# AprilTag scan-and-map endpoints
+# ----------------------------------------------
+
+async def scan_start_handler(request: web.Request) -> web.Response:
+    runner = request.app["scan_runner"]
+    with _motion_lock:
+        if estop_is_active():
+            return web.json_response(
+                {"ok": False, "message": "e-stop active"}, status=409)
+        if not get_client().stop():
+            message = "Pi did not acknowledge stop; scan not started"
+            log.error("SCAN START REFUSED: %s", message)
+            return web.json_response(
+                {"ok": False, "message": message}, status=503)
+        ok, message = runner.start()
+    log.info("SCAN START: ok=%s message=%s", ok, message)
+    return web.json_response(
+        {"ok": ok, "message": message}, status=200 if ok else 409)
+
+
+async def scan_stop_handler(request: web.Request) -> web.Response:
+    request.app["scan_runner"].stop()
+    log.info("SCAN STOP requested")
+    return web.json_response({"ok": True, "message": "stop requested"})
+
+
+async def scan_status_handler(request: web.Request) -> web.Response:
+    return web.json_response(request.app["scan_runner"].status())
+
+
 async def _apriltag_loop(app: web.Application) -> None:
     worker = app["apriltag_worker"]
     grabber = get_grabber()
 
     try:
         while True:
-            frame_time = time.monotonic()
-            frame = grabber.get_frame()
+            frame, frame_time = grabber.get_frame_with_timestamp()
 
             if frame is not None:
                 worker.submit_frame(frame, frame_time)
@@ -566,14 +653,60 @@ async def on_startup(app: web.Application) -> None:
     app["apriltag_task"] = asyncio.create_task(
         _apriltag_loop(app)
     )
+    app["scan_runner"] = ScanRunner(
+        get_servos(),
+        app["apriltag_worker"].latest_result,
+        estop_is_active,
+        motion_lock=_motion_lock,
+    )
+    _set_scan_runner(app["scan_runner"])
     get_client()    # connects to RPi TCP server
     log.info("All subsystems ready.")
 
 
 async def on_shutdown(app: web.Application) -> None:
+    global _estop_active
+    scan_runner = app.get("scan_runner")
+    with _motion_lock:
+        with _estop_lock:
+            _estop_active = True
+
+        # Attempt the Pi hardware stop before scan or servo cleanup.
+        try:
+            shutdown_pi_acknowledged = bool(get_client().estop())
+        except Exception:
+            shutdown_pi_acknowledged = False
+            log.exception("Shutdown Pi E-stop command failed")
+
+        if not shutdown_pi_acknowledged:
+            log.critical(
+                "SHUTDOWN: Pi did not acknowledge hardware E-stop; "
+                "robot stop is unconfirmed"
+            )
+
+        if scan_runner is not None:
+            try:
+                scan_runner.estop()
+            except Exception:
+                log.exception("Shutdown: failed to abort scan")
+
+        try:
+            get_servos().hold()
+        except Exception:
+            log.exception("Shutdown: failed to hold servos")
+
     imu_session = app.get("imu_session")
     if imu_session is not None and not imu_session.closed:
         await imu_session.close()
+
+    scan_stopped = True
+    if scan_runner is not None:
+        scan_stopped = scan_runner.shutdown()
+        if not scan_stopped:
+            log.critical(
+                "Scan thread did not stop; leaving servo driver open "
+                "to avoid concurrent hardware access."
+            )
     apriltag_task = app.get("apriltag_task")
     if apriltag_task is not None:
         apriltag_task.cancel()
@@ -591,10 +724,14 @@ async def on_shutdown(app: web.Application) -> None:
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
-    # Stop hardware
-    get_client().stop()
     shutdown_client()
-    shutdown_servos()
+    if scan_stopped:
+        servo_stopped = shutdown_servos(center=False)
+        if not servo_stopped:
+            log.critical(
+                "Servo slew thread did not stop; PCA driver left open "
+                "to avoid concurrent hardware access."
+            )
     shutdown_grabber()
     log.info("Shutdown complete.")
 
@@ -611,6 +748,9 @@ def main() -> None:
     app.router.add_get("/imu",     imu_handler)
     app.router.add_get("/snapshot", snapshot_handler)
     app.router.add_get("/stream",  stream_handler)
+    app.router.add_post("/scan/start", scan_start_handler)
+    app.router.add_post("/scan/stop",  scan_stop_handler)
+    app.router.add_get("/scan/status", scan_status_handler)
     app.router.add_static("/ui/",  UI_DIR)
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)

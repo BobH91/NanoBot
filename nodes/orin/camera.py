@@ -141,6 +141,13 @@ class FrameGrabber:
         with self._lock:
             return self._frame.copy() if self._frame is not None else None
 
+    def get_frame_with_timestamp(self):
+        """Return (frame copy, capture monotonic time) from the same capture."""
+        with self._lock:
+            if self._frame is None:
+                return None, None
+            return self._frame.copy(), self._frame_time
+
     def get_jpeg(self) -> bytes | None:
         """Return latest frame encoded as JPEG bytes."""
         frame = self.get_frame()

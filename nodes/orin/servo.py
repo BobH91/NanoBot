@@ -190,12 +190,22 @@ class ServoDriver:
         with self._lock:
             return {"pan": self._cur_pan, "tilt": self._cur_tilt}
 
-    def close(self) -> None:
+    def hold(self) -> None:
+        """Stop commanded slew at the current software-estimated position."""
+        with self._lock:
+            self._target_pan = self._cur_pan
+            self._target_tilt = self._cur_tilt
+
+    def close(self, center: bool = True) -> bool:
         self._running = False
         self._thread.join(timeout=1.0)
-        self.centre()
-        time.sleep(0.3)
+        if self._thread.is_alive():
+            return False
+        if center:
+            self.centre()
+            time.sleep(0.3)
         self._pca.close()
+        return True
 
     # ── Slew loop ───────────────────────────────
 
@@ -206,9 +216,10 @@ class ServoDriver:
             with self._lock:
                 self._cur_pan  = self._step(self._cur_pan,  self._target_pan,  max_step)
                 self._cur_tilt = self._step(self._cur_tilt, self._target_tilt, max_step)
-                cp, ct = self._cur_pan, self._cur_tilt
-            self._write_pan(cp)
-            self._write_tilt(ct)
+                # Keep the hardware writes inside the lock. hold() must wait
+                # for any in-progress write before fixing the current target.
+                self._write_pan(self._cur_pan)
+                self._write_tilt(self._cur_tilt)
 
     @staticmethod
     def _step(current: float, target: float, max_step: float) -> float:
@@ -251,12 +262,15 @@ def get_servos() -> ServoDriver:
     return _servos
 
 
-def shutdown_servos() -> None:
+def shutdown_servos(center: bool = True) -> bool:
     global _servos
     with _servos_lock:
-        if _servos is not None:
-            _servos.close()
-            _servos = None
+        if _servos is None:
+            return True
+        if not _servos.close(center=center):
+            return False
+        _servos = None
+        return True
 
 
 # ──────────────────────────────────────────────
