@@ -235,7 +235,8 @@ class ScanRunner:
             candidate = self._get_result()
             if (candidate is not None
                     and candidate.frame_time is not None
-                    and candidate.frame_time > threshold):
+                    and candidate.frame_time > threshold
+                    and candidate.tags):
                 result = candidate
                 break
             if time.monotonic() > deadline:

@@ -63,7 +63,7 @@ def make_get_result(servos):
     return get_result
 
 
-def wait_done(runner, timeout=20.0):
+def wait_done(runner, timeout=40.0):
     end = time.monotonic() + timeout
     while runner.is_running():
         assert time.monotonic() < end, "scan did not finish"
@@ -103,6 +103,54 @@ def test_full_scan():
             header = handle.readline().strip()
         assert header.startswith("stop,pan_deg,tilt_deg,tag_id"), header
     print("PASS: full scan recovers both tag positions, restores servos, writes CSV")
+
+
+def test_waits_for_positive_detection():
+    servos = FakeServos()
+    calls = [0]
+
+    tag = SimpleNamespace(
+        tag_id=7, hamming=0, decision_margin=50.0,
+        x_m=0.0, y_m=0.0, z_m=1.0)
+
+    def get_result():
+        calls[0] += 1
+        tags = (tag,) if calls[0] >= 4 else ()
+        return SimpleNamespace(
+            frame_time=time.monotonic() + 1.0,
+            tags=tags,
+            error=None)
+
+    runner = ScanRunner(servos, get_result, lambda: False)
+    runner._visit(0, 0, 0)
+
+    assert calls[0] >= 4, calls
+    assert len(runner._samples) == 1, runner._samples
+    assert runner._samples[0]["tag_id"] == 7
+    assert runner.status()["timeouts"] == 0
+    print("PASS: empty fresh results are ignored until a positive detection")
+
+
+def test_no_detection_times_out():
+    servos = FakeServos()
+
+    def get_empty_result():
+        return SimpleNamespace(
+            frame_time=time.monotonic() + 1.0,
+            tags=(),
+            error=None)
+
+    old_timeout = config.SCAN_RESULT_TIMEOUT_S
+    config.SCAN_RESULT_TIMEOUT_S = 0.08
+    try:
+        runner = ScanRunner(servos, get_empty_result, lambda: False)
+        runner._visit(0, 0, 0)
+        assert runner._samples == [], runner._samples
+        assert runner.status()["timeouts"] == 1, runner.status()
+    finally:
+        config.SCAN_RESULT_TIMEOUT_S = old_timeout
+
+    print("PASS: no positive detection before deadline counts as timeout")
 
 
 def test_refuses_when_estop():
@@ -161,10 +209,12 @@ def test_estop_mid_scan():
 def main():
     test_build_stops()
     test_full_scan()
+    test_waits_for_positive_detection()
+    test_no_detection_times_out()
     test_refuses_when_estop()
     test_stop_mid_scan()
     test_estop_mid_scan()
-    print("ALL PASS (5 tests)")
+    print("ALL PASS (7 tests)")
 
 
 if __name__ == "__main__":
