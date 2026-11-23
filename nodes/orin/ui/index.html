@@ -71,6 +71,11 @@ button {
     font-size: 14px;
     margin: 10px;
 }
+#servo-readout {
+    font-family: monospace;
+    font-size: 16px;
+    margin: 10px;
+}
 </style>
 
 </head>
@@ -87,6 +92,12 @@ button {
 
 
 <video id="video" autoplay playsinline></video>
+
+<div class="panel" id="servo-panel">
+<h2>Camera Servos</h2>
+<div id="servo-readout">Waiting for servo status...</div>
+<div>Software-reported position — no physical encoder feedback</div>
+</div>
 
 <div class="panel" id="tag-panel">
 <h2>AprilTags</h2>
@@ -255,7 +266,11 @@ async function pollTags() {
   try {
     const resp = await fetch('/status', { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const a = (await resp.json()).apriltag;
+    const status = await resp.json();
+    const a = status.apriltag;
+    const servo = status.servo || {};
+    document.getElementById('servo-readout').textContent =
+      `Pan: ${fmt(servo.pan, 1)}° | Tilt: ${fmt(servo.tilt, 1)}°`;
     if (!a || !a.worker_alive) {
       showTagLines(['AprilTag worker not running']);
     } else if (a.error) {
