@@ -52,13 +52,17 @@ CH_TILT         = 1
 # ──────────────────────────────────────────────
 PAN_MIN_DEG     = -90
 PAN_MAX_DEG     =  90
-TILT_MIN_DEG    = -45
-TILT_MAX_DEG    =  45
+TILT_MIN_DEG    = -30
+TILT_MAX_DEG    =  10
+# Preserve original servo pulse calibration.
+TILT_PULSE_MIN_DEG = -45
+TILT_PULSE_MAX_DEG = 45
 
 # ──────────────────────────────────────────────
 # Slew rate
 # ──────────────────────────────────────────────
-SLEW_RATE_DEG_S = 120.0        # max degrees per second
+PAN_SLEW_RATE_DEG_S  = 120.0
+TILT_SLEW_RATE_DEG_S = 30.0
 SLEW_INTERVAL   = 0.020        # 50 Hz slew loop
 
 
@@ -210,12 +214,13 @@ class ServoDriver:
     # ── Slew loop ───────────────────────────────
 
     def _slew_loop(self) -> None:
-        max_step = SLEW_RATE_DEG_S * SLEW_INTERVAL
+        pan_step = PAN_SLEW_RATE_DEG_S * SLEW_INTERVAL
+        tilt_step = TILT_SLEW_RATE_DEG_S * SLEW_INTERVAL
         while self._running:
             time.sleep(SLEW_INTERVAL)
             with self._lock:
-                self._cur_pan  = self._step(self._cur_pan,  self._target_pan,  max_step)
-                self._cur_tilt = self._step(self._cur_tilt, self._target_tilt, max_step)
+                self._cur_pan  = self._step(self._cur_pan,  self._target_pan,  pan_step)
+                self._cur_tilt = self._step(self._cur_tilt, self._target_tilt, tilt_step)
                 # Keep the hardware writes inside the lock. hold() must wait
                 # for any in-progress write before fixing the current target.
                 self._write_pan(self._cur_pan)
@@ -235,7 +240,7 @@ class ServoDriver:
         self._pca.set_pulse_us(CH_PAN, us)
 
     def _write_tilt(self, degrees: float) -> None:
-        us = _deg_to_us(degrees, TILT_MIN_DEG, TILT_MAX_DEG)
+        us = _deg_to_us(degrees, TILT_PULSE_MIN_DEG, TILT_PULSE_MAX_DEG)
         self._pca.set_pulse_us(CH_TILT, us)
 
     # ── Context manager ──────────────────────────

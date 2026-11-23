@@ -40,8 +40,8 @@ PAN_MAX_DEG   =  90
 PAN_CENTER    =   0
 PAN_STEP_DEG  =   5             # degrees per button tick
 
-TILT_MIN_DEG  = -45
-TILT_MAX_DEG  =  45
+TILT_MIN_DEG  = -30
+TILT_MAX_DEG  =  10
 TILT_CENTER   =   0
 TILT_STEP_DEG =   5
 
@@ -55,7 +55,7 @@ DC_TELEMETRY  = "telemetry"     # Nano → browser: JSON status
 SCAN_PAN_MIN_DEG      = -90
 SCAN_PAN_MAX_DEG      =  90
 SCAN_PAN_STEP_DEG     =  20               # FOV 49.8 deg -> ~30 deg overlap
-SCAN_TILT_ROWS_DEG    = (-30, -15, 0, 15, 30)   # FOV 29.4 deg -> ~14 deg overlap
+SCAN_TILT_ROWS_DEG    = (-30, -15, 0, 5, 10)   # FOV 29.4 deg -> ~14 deg overlap
 SCAN_ARRIVE_TOL_DEG   = 0.5               # servo.get_position() within this of target
 SCAN_SETTLE_S         = 0.40              # extra dwell after arrival (no servo feedback)
 SCAN_FRESH_MARGIN_S   = 0.25              # accept results with frame_time > settle_done + this
