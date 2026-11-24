@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "map_name": "nanobot_initial_apriltag_landmarks",
+  "created_date": "2026-11-24",
+  "source": {
+    "scan_csv": "/home/bob/NanoBot/nodes/orin/logs/scan_20261124_092832.csv",
+    "scan_state": "done",
+    "stops_completed": 60,
+    "detections": 33,
+    "timeouts": 41,
+    "notes": "First physical scan. Tags 0-3 observed; Tags 4 and 5 not observed."
+  },
+  "coordinate_frame": {
+    "frame_id": "scan_robot_frame",
+    "origin": "assumed stationary camera reference during scan",
+    "axes": {
+      "x": "robot right, metres",
+      "y": "robot forward, metres",
+      "z": "robot up, metres"
+    },
+    "pose_input_convention": {
+      "x": "camera right",
+      "y": "camera down",
+      "z": "camera forward"
+    },
+    "limitations": [
+      "Preliminary scan-derived map; not navigation-grade.",
+      "Camera translation caused by pan/tilt pivot offsets is not modelled.",
+      "Camera/chassis extrinsic translation and rotation are not surveyed.",
+      "Reported spread reflects variation across scan observations and is not a complete uncertainty model.",
+      "Tags 4 and 5 were not observed and have no coordinates."
+    ]
+  },
+  "landmarks": [
+    {
+      "tag_id": 0,
+      "position_m": {"x": 0.1423, "y": 2.5336, "z": -0.1720},
+      "sample_count": 7,
+      "population_stddev_m": {"x": 0.0188, "y": 0.0137, "z": 0.2051},
+      "status": "observed_preliminary"
+    },
+    {
+      "tag_id": 1,
+      "position_m": {"x": 1.9855, "y": 3.2303, "z": -0.1573},
+      "sample_count": 12,
+      "population_stddev_m": {"x": 0.1156, "y": 0.0444, "z": 0.4432},
+      "status": "observed_preliminary"
+    },
+    {
+      "tag_id": 2,
+      "position_m": {"x": 3.9882, "y": 3.7938, "z": -0.0125},
+      "sample_count": 8,
+      "population_stddev_m": {"x": 0.1128, "y": 0.0863, "z": 0.6598},
+      "status": "observed_preliminary"
+    },
+    {
+      "tag_id": 3,
+      "position_m": {"x": 4.6296, "y": 2.1089, "z": 0.0615},
+      "sample_count": 6,
+      "population_stddev_m": {"x": 0.0765, "y": 0.1218, "z": 0.5938},
+      "status": "observed_preliminary"
+    },
+    {
+      "tag_id": 4,
+      "position_m": null,
+      "sample_count": 0,
+      "status": "not_observed"
+    },
+    {
+      "tag_id": 5,
+      "position_m": null,
+      "sample_count": 0,
+      "status": "not_observed"
+    }
+  ]
+}
