@@ -72,11 +72,18 @@ def wait_done(runner, timeout=40.0):
 
 def test_build_stops():
     stops = build_stops()
-    assert len(stops) == 50, len(stops)
-    assert stops[0] == (-90, -30), stops[0]
-    assert stops[9] == (90, -30), stops[9]
-    assert stops[10] == (90, -15), stops[10]
-    print("PASS: build_stops (50 stops, serpentine)")
+    assert len(stops) == 60, len(stops)
+
+    expected_rows = (-30, -15, -5, 0, 5, 10)
+    forward = [-90, -70, -50, -30, -10, 10, 30, 50, 70, 90]
+    reverse = list(reversed(forward))
+
+    for row_index, tilt in enumerate(expected_rows):
+        row = stops[row_index * 10:(row_index + 1) * 10]
+        expected_pan = forward if row_index % 2 == 0 else reverse
+        assert row == [(pan, tilt) for pan in expected_pan], row
+
+    print("PASS: build_stops (60 stops, six serpentine rows)")
 
 
 def test_full_scan():
